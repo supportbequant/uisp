@@ -19,7 +19,8 @@ for both types of access must be created.
 
 ### Steps
 
-1. Go to code (repository)[https://github.com/supportbequant/uisp] and get the code zip file (in repository home page, go to Code->Download ZIP).
+1. Go to code [repository](https://github.com/supportbequant/uisp) and get the code zip file (in repository home page, go to Code->Download ZIP).
+![github code zip](github-uisp-get-zip.png)
 
 2. Unzip the code zip file. For example with unzip command:
 ```
