@@ -9,22 +9,23 @@ using the UISP REST API and update the BQN server using the BQN REST API.
 
 ### Prerequisites
 
-1. BQN with package linux-R3.0.13-3-20231127 or later.
+1. BQN with packages linux-R3.0.13-2-20231130 or later and bqn-R4.18.8 or later.
 
 2. BQN with REST API enabled (see https://www.bequant.com/docs/rest#rest-configuration).
 
 3. UISP with REST API enabled with access to both NMS and CRM. A common API KEY 
 for both types of access must be created.
 
-4. A PC with git installed (see https://git-scm.com/downloads).
 
 ### Steps
 
-1. In the PC, create a git clone:
+1. Go to code (repository)[https://github.com/supportbequant/uisp] and get the code zip file (in repository home page, go to Code->Download ZIP).
+
+2. Unzip the code zip file. For example with unzip command:
 ```
-git clone https://github.com/supportbequant/uisp.git
+unzip uisp-main.zip
 ```
-This will create a directory called uisp under your current directory.
+This will create a subdirectory named uisp-main.
 
 2. Create a uisp directory in the BQN server root account:
 ```
@@ -53,7 +54,7 @@ UISP-KEY=5a15d248-376b-1324-cd15-24ad3a37be31
 
 4. Transfer the following files from the PC to the BQN server using scp:
 ```
-scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn ./uisp/sync-uisp-bqn.sh root@<BQN-OAM-IP>:uisp
+scp ./uisp-main/BillingSync.py  ./uisp-main/sync-uisp-bqn ./uisp-main/sync-uisp-bqn.sh root@<BQN-OAM-IP>:uisp
 ```
 
 5. In the BQN, copy sync-uisp-bqn.sh to the crontab directory so it is executed every 5 minutes:
@@ -78,15 +79,17 @@ To see the policies and subscribers createe in the BQN server, see the section
 
 To update the synchronization script, do the following:
 
-1. In the PC, update the git repository
-```
-cd uisp
-git pull
-```
+1. Go to code (repository)[https://github.com/supportbequant/uisp] and get the code zip file (in repository home page, go to Code->Download ZIP).
 
-2. Transfer the following files from the PC to the BQN server using scp:
+2. Unzip the code zip file. For example with unzip command:
 ```
-scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn root@<BQN-OAM-IP>:uisp
+unzip uisp-main.zip
+```
+This will create a subdirectory named uisp-main.
+
+3. Transfer the following files from the PC to the BQN server using scp:
+```
+scp ./uisp-main/BillingSync.py  ./uisp-main/sync-uisp-bqn root@<BQN-OAM-IP>:uisp
 ```
 Where \<BQN-OAM-IP\> is the managemement IP address of the BQN server. NOTE 
 that the sync-uisp-bqn.sh MUST NOT be updated.
