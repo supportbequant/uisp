@@ -20,9 +20,11 @@ for both types of access must be created.
 
 ### Steps
 
-1. In the PC, create a git clone
-`git clone https://github.com/supportbequant/uisp.git`
-This will create a directory called uisp under your current directory
+1. In the PC, create a git clone:
+```
+git clone https://github.com/supportbequant/uisp.git
+```
+This will create a directory called uisp under your current directory.
 
 2. Create a uisp directory in the BQN server root account:
 ```
@@ -30,7 +32,7 @@ ssh root@<BQN-OAM-IP>
 mkdir uisp
 exit
 ```
-Where <BQN-OAM-IP> is the managemement IP address of the BQN server
+Where \<BQN-OAM-IP\> is the managemement IP address of the BQN server
 
 3. Edit the sync-uisp-bqn.sh to set the parameters to your environment values.
 Example:
@@ -50,7 +52,9 @@ UISP-KEY=5a15d248-376b-1324-cd15-24ad3a37be31
 ```
 
 4. Transfer the following files from the PC to the BQN server using scp:
-`scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn ./uisp/sync-uisp-bqn.sh root@<BQN-OAM-IP>:uisp`
+```
+scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn ./uisp/sync-uisp-bqn.sh root@<BQN-OAM-IP>:uisp
+```
 
 5. In the BQN, copy sync-uisp-bqn.sh to the crontab directory so it is executed every 5 minutes:
 ```
@@ -81,8 +85,10 @@ git pull
 ```
 
 2. Transfer the following files from the PC to the BQN server using scp:
-`scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn root@<BQN-OAM-IP>:uisp`
-Where <BQN-OAM-IP> is the managemement IP address of the BQN server
+```
+scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn root@<BQN-OAM-IP>:uisp
+```
+Where \<BQN-OAM-IP\> is the managemement IP address of the BQN server
 NOTE that the sync-uisp-bqn.sh MUST NOT be updated.
  
 ## Known limitations
