@@ -41,15 +41,15 @@ Example:
 ```
 . . .
 # BQN management IP address
-BQN-OAM-IP=192.168.0.121
+BQN_OAM_IP=192.168.0.121
 # Name of the REST user in the BQN server
-BQN-REST-USER=myuser 
+BQN_REST_USER=myuser
 # Password of the REST user in the BQN server
-BQN-REST-PW=mypassword
+BQN_REST_PW=mypassword
 # IP address or domain of the UISP server
-UISP-SERVER=myserver.uisp.com
+UISP_SERVER=myserver.uisp.com
 # REST API KEY of the UISP server
-UISP-KEY=5a15d248-376b-1324-cd15-24ad3a37be31
+UISP_KEY=5a15d248-376b-1324-cd15-24ad3a37be31
 . . .
 ```
 
@@ -70,6 +70,8 @@ You can check the script log in the BQN:
 ```
 ssh root@<BQN-OAM-IP>
 less /tmp/sync-uisp-bqn.log
+Synchronization at 2024-01-03 18:40:02.059393 with script v1.5
+Synchronization at 2024-01-03 18:40:19.251052 of 26 policies and 649 subscribers
 ```
 
 To see the policies and subscribers createe in the BQN server, see the section

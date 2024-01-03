@@ -4,18 +4,18 @@
 #
 
 # BQN management IP address
-BQN-OAM-IP=192.168.0.121
+BQN_OAM_IP=192.168.0.121
 # Name of the REST user in the BQN server
-BQN-REST-USER=myuser 
+BQN_REST_USER=myuser 
 # Password of the REST user in the BQN server
-BQN-REST-PW=mypassword
+BQN_REST_PW=mypassword
 # IP address or domain of the UISP server
-UISP-SERVER=uisp.com
+UISP_SERVER=uisp.com
 # REST API KEY of the UISP server
-UISP-KEY=apikey
+UISP_KEY=apikey
 
 # Main part, do not modify
 #
 
 cd /root/uisp
-./sync-uisp-bqn -b ${BQN-OAM-IP} ${BQN-REST-USER} ${BQN-REST-PW}  ${UISP-SERVER} ${UISP-KEY} >> /tmp/sync-uisp-bqn.log
+./sync-uisp-bqn -b ${BQN_OAM_IP} ${BQN_REST_USER} ${BQN_REST_PW} ${UISP_SERVER} ${UISP_KEY} >> /tmp/sync-uisp-bqn.log
