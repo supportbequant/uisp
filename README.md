@@ -25,14 +25,16 @@ for both types of access must be created.
 This will create a directory called uisp under your current directory
 
 2. Create a uisp directory in the BQN server root account:
-`ssh root@<BQN-OAM-IP>`
-`mkdir uisp`
-`exit`
+```
+ssh root@<BQN-OAM-IP>
+mkdir uisp
+exit
+```
 Where <BQN-OAM-IP> is the managemement IP address of the BQN server
 
 3. Edit the sync-uisp-bqn.sh to set the parameters to your environment values.
 Example:
-`
+```
 . . .
 # BQN management IP address
 BQN-OAM-IP=192.168.0.121
@@ -45,20 +47,24 @@ UISP-SERVER=myserver.uisp.com
 # REST API KEY of the UISP server
 UISP-KEY=5a15d248-376b-1324-cd15-24ad3a37be31
 . . .
-`
+```
 
 4. Transfer the following files from the PC to the BQN server using scp:
 `scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn ./uisp/sync-uisp-bqn.sh root@<BQN-OAM-IP>:uisp`
 
 5. In the BQN, copy sync-uisp-bqn.sh to the crontab directory so it is executed every 5 minutes:
-`ssh root@<BQN-OAM-IP>` 
-`cp uisp/sync-uisp-bqn.sh /bqn/root/etc/cron.5` 
+```
+ssh root@<BQN-OAM-IP>
+cp uisp/sync-uisp-bqn.sh /bqn/root/etc/cron.5
+``` 
 
 And that's all, the script will access the UISP every 5 minutes and update the BQN accordingly.
 You can check the script log in the BQN:
 
-`ssh root@<BQN-OAM-IP>` 
-`less /tmp/sync-uisp-bqn.log`
+```
+ssh root@<BQN-OAM-IP>
+less /tmp/sync-uisp-bqn.log
+```
 
 To see the policies and subscribers createe in the BQN server, see the section
 "Check the REST API" in https://www.bequant.com/docs/rest#rest-configuration
@@ -69,8 +75,10 @@ To see the policies and subscribers createe in the BQN server, see the section
 To update the synchronization script, do the following:
 
 1. In the PC, update the git repository
-`cd uisp`
-`git pull`
+```
+cd uisp
+git pull
+```
 
 2. Transfer the following files from the PC to the BQN server using scp:
 `scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn root@<BQN-OAM-IP>:uisp`
