@@ -88,8 +88,8 @@ git pull
 ```
 scp ./uisp/BillingSync.py  ./uisp/sync-uisp-bqn root@<BQN-OAM-IP>:uisp
 ```
-Where \<BQN-OAM-IP\> is the managemement IP address of the BQN server
-NOTE that the sync-uisp-bqn.sh MUST NOT be updated.
+Where \<BQN-OAM-IP\> is the managemement IP address of the BQN server. NOTE 
+that the sync-uisp-bqn.sh MUST NOT be updated.
  
 ## Known limitations
 
