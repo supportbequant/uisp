@@ -1,0 +1,247 @@
+#!/usr/bin/python3
+
+################################################################################
+#
+# Copyright (c) 2022 Bequant S.L.
+# All rights reserved.
+#
+# This product or document is proprietary to and embodies the
+# confidential technology of Bequant S.L., Spain.
+# Possession, use, duplication or distribution of this product
+# or document is authorized only pursuant to a valid written
+# license from Bequant S.L.
+#
+#
+################################################################################
+
+import json
+import argparse
+import math
+
+import requests
+if not requests.__version__.startswith("1."):
+  # Avoid insecure warning when issuing REST queries
+  import urllib3
+  urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+from BillingSync import BillingSync
+
+################################################################################
+
+class UispSync(BillingSync):
+
+  ############################################################################
+
+  # UISP Client/Service status
+  STATUS_PREPARED = 0
+  STATUS_ACTIVE = 1
+  STATUS_ENDED = 2
+  STATUS_SUSPENDED = 3
+  STATUS_PREPARED_BLOCKED = 4
+  STATUS_OBSOLETE = 5
+  STATUS_DEFERRED = 6
+  STATUS_QUOTED = 7
+  STATUS_INACTIVE = 8
+
+  ############################################################################
+
+  def getEntries(self, url, key):
+    headers = {
+    "X-Auth-Token": "%s" % key,
+    "content-type": "application/json;charset=UTF-8",
+    "Accept-Charset": "UTF-8",
+    "Accept": "application/json",
+    "Connection": "keep-alive"
+    }
+    self.logger.info("GET to %s" % url)
+    rsp = requests.get(url, headers=headers, verify=False)
+    self.printResponseDetails(rsp)
+    if rsp.status_code != 200:
+      raise Exception("Bad query %s" % rsp.text)
+    return json.loads(rsp.text)
+
+  def getUcrmEntries(self, server, key, query):
+    url =  "https://" + server + "/api/v1.0" + query
+    return self.getEntries(url, key)
+
+  def getUnmsEntries(self, server, key, query):
+    url =  "https://" + server + "/nms/api/v2.1" + query
+    return self.getEntries(url, key)
+
+  ############################################################################
+
+  def getPlanName(self, prefix, upRate, dnRate):
+    rsp = prefix
+    if upRate:
+      rsp += str(math.ceil(upRate)) + 'M/'
+    if dnRate:
+      rsp += str(math.ceil(dnRate)) + 'M'
+    return rsp
+
+  def getPlanLimits(self, upRate, dnRate):
+    upLimit = 10**8 # 100 Gbps limit = no limit
+    dnLimit = 10**8
+    if upRate:
+      upLimit = math.ceil(1000*upRate)
+    if dnRate:
+      dnLimit = math.ceil(1000*dnRate)
+    return upLimit, dnLimit
+
+  def getSubscriberId(self, client):
+    if client['firstName'] and client['lastName']:
+      return "%s %s" % (client['firstName'], client['lastName'])
+    elif client['companyName']:
+      return client['companyName']
+    elif client['lastName']:
+      return client['lastName']
+    elif client['firstNane']:
+      return client['firstName']
+    else:
+      return 'UNKNOWN'
+
+  def getOverridePolicy(self, clientPlan):
+    planName = self.getPlanName("OVER %s with " % clientPlan['servicePlanName'],
+                            clientPlan['uploadSpeedOverride'], clientPlan['downloadSpeedOverride'])
+    upLimit, dnLimit = self.getPlanLimits(clientPlan['uploadSpeedOverride'], clientPlan['downloadSpeedOverride'])
+    return {
+      "policyName": planName,
+      "policyId": str(clientPlan["id"]+1000),
+      "rateLimitUplink": {"rate": upLimit},
+      "rateLimitDownlink": {"rate": dnLimit}
+    }
+
+
+  ################################################################################
+
+  def normalizeData(self, plans, clients, services, sites):
+    data = {'subscribers': [], 'policies': []}
+
+    # Policies
+    #
+
+    for p in plans:
+      if not p['name']:
+        self.logger.warning("Cannot add to BQN a plan without a name")
+        continue
+      if p['servicePlanType'] != 'Internet':
+        self.logger.debug("Ignore plan %s whose type is %s" % (p['name'], p['servicePlanType']))
+        continue
+      upLimit, dnLimit = self.getPlanLimits(p["uploadSpeed"], p["downloadSpeed"])
+      match = [x for x in data["policies"] if x['policyName'] == p['name']]
+      if len(match) != 0:
+        if match[0]["rateLimitUplink"]["rate"] == upLimit and \
+           match[0]["rateLimitDownlink"]["rate"] == dnLimit:
+          self.logger.debug("Ignore plan %s with repeated name" % p['name'])
+        else:
+          self.logger.error("Two plans with same name and different limits" % p['name'])
+        continue
+      policy = {
+        "policyName": p["name"],
+        "policyId": str(p["id"]),
+        "rateLimitUplink": {},
+        "rateLimitDownlink": {}
+      }
+      policy["rateLimitUplink"]["rate"] = upLimit
+      policy["rateLimitDownlink"]["rate"] = dnLimit
+      data["policies"].append(policy)
+
+    # Subscribers
+    #
+
+    for c in clients:
+      if c['isLead']: # This is a lead, not a client yet
+        continue
+      match = [x for x in services if x['clientId'] == c['id'] and x["servicePlanType"] == "Internet"]
+      if len(match) == 0:
+        self.logger.debug("Client without service (id: %s, name: %s %s)" % (c['id'], c['firstName'], c['lastName']))
+        continue
+      for cp in match:
+        # Get subscriber policy
+        if not cp['trafficShapingOverrideEnabled']:
+          match = [x for x in data["policies"] if x['policyName'] == cp['servicePlanName']]
+          if len(match) == 0:
+            self.logger.warning("Plan not found (%s)" % cp['servicePlanName'])
+          ratePolicy = cp['servicePlanName']
+        else: # create override policy
+          overridePolicy = self.getOverridePolicy(cp)
+          data["policies"].append(overridePolicy)
+          ratePolicy = overridePolicy["policyName"]
+        # Look for the subscriber IP in his site
+        match = [x for x in sites if (x['identification']['role'] == 'station' or \
+                                      x['identification']['role'] == 'wireless' or
+                                      x['identification']['role'] == 'router') and \
+                                    x['identification']['site']['id'] == cp['unmsClientSiteId']]
+        if len(match) == 0:
+          self.logger.debug("Client without a site (subscriberID: %s)" % subscriber["subscriberId"])
+          continue
+        for site in match:
+          subscriber = {}
+          subscriber["policyRate"] = ratePolicy
+          subscriber["subscriberId"] = self.getSubscriberId(c)
+          subscriber["state"] = cp["status"]
+          subscriber["block"] = cp['status'] != UispSync.STATUS_ACTIVE and cp['status'] != UispSync.STATUS_SUSPENDED
+          subscriber["subscriberIp"] = site['ipAddress'].split('/', 1)[0]
+          subscriber["subscriberGroups"] = []
+          # Add subscriber to site parent group (tower)
+          if site['identification']['site'] and 'parent' in site['identification']['site'] and \
+                site['identification']['site']['parent']:
+            subscriber["subscriberGroups"].append('L2-' + site['identification']['site']['parent']['name'])
+          # Add subscriber to AP group
+          if site['attributes'] and 'apDevice' in site['attributes'] and \
+                site['attributes']['apDevice']:
+            subscriber["subscriberGroups"].append('L1-' + site['attributes']['apDevice']['name'])
+          # Remove duplicates
+          subscriber["subscriberGroups"] = list(set(subscriber["subscriberGroups"]))
+          # Done, add subsciber to the data structure
+          data["subscribers"].append(subscriber)
+
+    return data
+
+################################################################################
+
+if __name__ == "__main__":
+
+  parser = argparse.ArgumentParser(
+    description="""
+  Synchronizes speed limits in Wispro contracts with BQN rate policies.
+
+  Requires an API KEY in UISP and the REST API enabled in BQN.
+
+  TODO: review
+
+  BQN Rate policies are identified by UISP plan "name", with spaces replaced by undescores.
+  BQN subscribers are identified by "firsName" and "lastName".
+  Plans in status other that active or suspended have their traffic blocked by BQN.
+
+  Known limitations:
+  - Synchronization may take several minutes.
+  - If the synchronization fails, no retry is attempted (must be don e externally).
+  - No scheduling of script execution (must be done externally).
+  """, formatter_class=argparse.RawTextHelpFormatter)
+
+  parser.add_argument('-b', help='BQN address and REST credentials. If absent, no BQN synchromization',
+                      nargs=3, metavar=('BQN-IP', 'REST-USER', 'REST-PW'), dest='bqn')
+  parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
+                    help="Display extra informationt (repeat for increased verbosity)")
+  parser.add_argument('uisp', metavar='UISP-HOST', type=str, help='UISP URL')
+  parser.add_argument('key', metavar='API-KEY', type=str, help=' REST API key')
+  args = parser.parse_args()
+
+  billingSync = UispSync(args.verbose)
+
+  plans = billingSync.getUcrmEntries(args.uisp, args.key, '/service-plans')
+  clients = billingSync.getUcrmEntries(args.uisp, args.key, '/clients')
+  services = billingSync.getUcrmEntries(args.uisp, args.key, '/clients/services')
+  sites = billingSync.getUnmsEntries(args.uisp, args.key, '/devices')
+
+  data = billingSync.normalizeData(plans, clients, services, sites)
+  billingSync.printData(data)
+  if args.bqn:
+    billingSync.updateBqn(args.bqn[0], args.bqn[1], args.bqn[2], data)
+
+
+
+
+
+
+
