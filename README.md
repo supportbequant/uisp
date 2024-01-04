@@ -28,15 +28,15 @@ unzip uisp-main.zip
 ```
 This will create a subdirectory named uisp-main.
 
-2. Create a uisp directory in the BQN server root account:
+3. Create a uisp directory in the BQN server root account:
 ```
 ssh root@<BQN-OAM-IP>
 mkdir uisp
 exit
 ```
-Where \<BQN-OAM-IP\> is the managemement IP address of the BQN server
+Where \<BQN-OAM-IP\> is the management IP address of the BQN server.
 
-3. Edit the sync-uisp-bqn.sh to set the parameters to your environment values.
+4. Edit the file sync-uisp-bqn.sh to set the parameters to your environment values.
 Example:
 ```
 . . .
@@ -53,12 +53,12 @@ UISP_KEY=5a15d248-376b-1324-cd15-24ad3a37be31
 . . .
 ```
 
-4. Transfer the following files from the PC to the BQN server using scp:
+5. Transfer the following files from the PC to the BQN server using scp:
 ```
 scp ./uisp-main/BillingSync.py  ./uisp-main/sync-uisp-bqn ./uisp-main/sync-uisp-bqn.sh root@<BQN-OAM-IP>:uisp
 ```
 
-5. In the BQN, copy sync-uisp-bqn.sh to the crontab directory so it is executed every 5 minutes:
+6. In the BQN, copy sync-uisp-bqn.sh to the crontab directory so it is executed every 5 minutes:
 ```
 ssh root@<BQN-OAM-IP>
 cp uisp/sync-uisp-bqn.sh /bqn/root/etc/cron.5
@@ -74,7 +74,7 @@ Synchronization at 2024-01-03 18:40:02.059393 with script v1.5
 Synchronization at 2024-01-03 18:40:19.251052 of 26 policies and 649 subscribers
 ```
 
-To see the policies and subscribers createe in the BQN server, see the section
+To see the policies and subscribers created in the BQN server, see the section
 "Check the REST API" in https://www.bequant.com/docs/rest#rest-configuration
 
 
@@ -94,11 +94,12 @@ This will create a subdirectory named uisp-main.
 ```
 scp ./uisp-main/BillingSync.py  ./uisp-main/sync-uisp-bqn root@<BQN-OAM-IP>:uisp
 ```
-Where \<BQN-OAM-IP\> is the managemement IP address of the BQN server. NOTE 
+Where \<BQN-OAM-IP\> is the management IP address of the BQN server. NOTE 
 that the sync-uisp-bqn.sh MUST NOT be updated.
  
 ## Known limitations
 
 - The first time it may take minutes to run. Following executions will send to BQN only client changes and will be quicker.
-- If the synchronization fails, no retry is attempted (must be done externally).
+- If the synchronization fails, no retry is attempted until the next scheduled task.
+
 
