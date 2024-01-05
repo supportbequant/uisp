@@ -110,10 +110,62 @@ class UispSync(BillingSync):
       "rateLimitDownlink": {"rate": dnLimit}
     }
 
+  def getAutoPolicy(self, clientPlan):
+    planName = self.getPlanName("AUTO %s " % clientPlan['servicePlanName'],
+                            clientPlan['uploadSpeed'], clientPlan['downloadSpeed'])
+    upLimit, dnLimit = self.getPlanLimits(clientPlan['uploadSpeed'], clientPlan['downloadSpeed'])
+    return {
+      "policyName": planName,
+      "policyId": str(clientPlan["id"]+1000),
+      "rateLimitUplink": {"rate": upLimit},
+      "rateLimitDownlink": {"rate": dnLimit}
+    }
+
 
   ################################################################################
 
-  def normalizeData(self, plans, clients, services, sites):
+  def getSubscriberIps(self, service, devices, sites):
+
+    ips = []
+
+    # Try in device first
+    match = [x for x in devices if (x['identification']['role'] == 'station' or \
+                                  x['identification']['role'] == 'wireless' or
+                                  x['identification']['role'] == 'router') and \
+                                  self.fieldIsNotNull(x, ['ipAddress']) and \
+                                  self.fieldIsNotNull(x, ['identification', 'site', 'id']) and \
+                                  x['identification']['site']['id'] == service['unmsClientSiteId']]
+    if len(match) > 0:
+      for device in match:
+        address = device['ipAddress'].split('/', 1)[0]
+        groups = []
+        if self.fieldIsNotNull(device, ['attributes', 'apDevice', 'name']):
+          groups.append('L1-' + device['attributes']['apDevice']['name'])
+        if self.fieldIsNotNull(device, ['identification', 'site', 'parent', 'name']):                                    
+          groups.append('L2-' + device['identification']['site']['parent']['name'])
+        ips.append({'address': address, 'groups': groups})
+    else: # Try in sites
+      match = [x for x in sites if x['identification']['status'] == 'active' and \
+                                   x['identification']['id'] == service['unmsClientSiteId'] and \
+                                   self.fieldIsNotNull(x, ['description', 'ipAddresses'])]
+      for site in match:    
+        groups = []
+        if site['identification']['type'] == 'endpoint':
+          if self.fieldIsNotNull(site, ['identification', 'parent', 'name']):
+            groups.append('L1-' + site['identification']['parent']['name'])
+        elif site['identification']['type'] == 'site':
+          if self.fieldIsNotNull(site, ['identification', 'name']):                                    
+            groups.append('L1-' + site['identification']['name'])
+          if self.fieldIsNotNull(site, ['identification', 'parent', 'name']):
+            groups.append('L2-' + site['identification']['parent']['name'])
+        for ip in site['description']['ipAddresses']:
+          ips.append({'address': ip, 'groups': groups})
+
+    return ips
+
+  ################################################################################
+
+  def normalizeData(self, plans, clients, services, devices, sites):
     data = {'subscribers': [], 'policies': []}
 
     # Policies
@@ -159,40 +211,29 @@ class UispSync(BillingSync):
         # Get subscriber policy
         if not cp['trafficShapingOverrideEnabled']:
           match = [x for x in data["policies"] if x['policyName'] == cp['servicePlanName']]
-          if len(match) == 0:
-            self.logger.warning("Plan not found (%s)" % cp['servicePlanName'])
-          ratePolicy = cp['servicePlanName']
+          if len(match) == 1:
+            ratePolicy = cp['servicePlanName']
+          elif len(match) == 0: 
+            # create automatic policy
+            autoPolicy = self.getAutoPolicy(cp)
+            data["policies"].append(autoPolicy)
+            ratePolicy = autoPolicy["policyName"]
+          else:
+            raise Exception("Duplicated policy Name")
         else: # create override policy
           overridePolicy = self.getOverridePolicy(cp)
           data["policies"].append(overridePolicy)
           ratePolicy = overridePolicy["policyName"]
-        # Look for the subscriber IP in his site
-        match = [x for x in sites if (x['identification']['role'] == 'station' or \
-                                      x['identification']['role'] == 'wireless' or
-                                      x['identification']['role'] == 'router') and \
-                                    x['identification']['site']['id'] == cp['unmsClientSiteId']]
-        if len(match) == 0:
-          self.logger.debug("Client without a site (subscriberID: %s)" % subscriber["subscriberId"])
-          continue
-        for site in match:
+        ipAddresses = self.getSubscriberIps(cp, devices, sites)
+        for ip in ipAddresses:
           subscriber = {}
           subscriber["policyRate"] = ratePolicy
           subscriber["subscriberId"] = self.getSubscriberId(c)
           subscriber["state"] = cp["status"]
           subscriber["block"] = cp['status'] != UispSync.STATUS_ACTIVE and cp['status'] != UispSync.STATUS_SUSPENDED
-          subscriber["subscriberIp"] = site['ipAddress'].split('/', 1)[0]
-          subscriber["subscriberGroups"] = []
-          # Add subscriber to site parent group (tower)
-          if site['identification']['site'] and 'parent' in site['identification']['site'] and \
-                site['identification']['site']['parent']:
-            subscriber["subscriberGroups"].append('L2-' + site['identification']['site']['parent']['name'])
-          # Add subscriber to AP group
-          if site['attributes'] and 'apDevice' in site['attributes'] and \
-                site['attributes']['apDevice']:
-            subscriber["subscriberGroups"].append('L1-' + site['attributes']['apDevice']['name'])
-          # Remove duplicates
-          subscriber["subscriberGroups"] = list(set(subscriber["subscriberGroups"]))
-          # Done, add subsciber to the data structure
+          subscriber["subscriberIp"] = ip['address']
+          subscriber["subscriberGroups"] = ip['groups']
+          # Done, add subscriber to the data structure
           data["subscribers"].append(subscriber)
 
     return data
@@ -232,9 +273,10 @@ if __name__ == "__main__":
   plans = billingSync.getUcrmEntries(args.uisp, args.key, '/service-plans')
   clients = billingSync.getUcrmEntries(args.uisp, args.key, '/clients')
   services = billingSync.getUcrmEntries(args.uisp, args.key, '/clients/services')
-  sites = billingSync.getUnmsEntries(args.uisp, args.key, '/devices')
+  devices = billingSync.getUnmsEntries(args.uisp, args.key, '/devices')
+  sites = billingSync.getUnmsEntries(args.uisp, args.key, '/sites')
 
-  data = billingSync.normalizeData(plans, clients, services, sites)
+  data = billingSync.normalizeData(plans, clients, services, devices, sites)
   billingSync.printData(data)
   if args.bqn:
     billingSync.updateBqn(args.bqn[0], args.bqn[1], args.bqn[2], data)
