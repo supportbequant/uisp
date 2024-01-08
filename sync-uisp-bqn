@@ -17,6 +17,7 @@
 import json
 import argparse
 import math
+import datetime
 
 import requests
 if not requests.__version__.startswith("1."):
@@ -72,10 +73,13 @@ class UispSync(BillingSync):
 
   def getPlanName(self, prefix, upRate, dnRate):
     rsp = prefix
-    if upRate:
-      rsp += str(math.ceil(upRate)) + 'M/'
-    if dnRate:
-      rsp += str(math.ceil(dnRate)) + 'M'
+    if not upRate and not dnRate:
+      rsp += "unlimited"
+    else:
+      if upRate:
+        rsp += str(math.ceil(upRate)) + 'M/'
+      if dnRate:
+        rsp += str(math.ceil(dnRate)) + 'M'
     return rsp
 
   def getPlanLimits(self, upRate, dnRate):
@@ -100,12 +104,12 @@ class UispSync(BillingSync):
       return 'UNKNOWN'
 
   def getOverridePolicy(self, clientPlan):
-    planName = self.getPlanName("OVER %s with " % clientPlan['servicePlanName'],
+    planName = self.getPlanName("OVRD %s with " % clientPlan['servicePlanName'],
                             clientPlan['uploadSpeedOverride'], clientPlan['downloadSpeedOverride'])
     upLimit, dnLimit = self.getPlanLimits(clientPlan['uploadSpeedOverride'], clientPlan['downloadSpeedOverride'])
     return {
       "policyName": planName,
-      "policyId": str(clientPlan["id"]+1000),
+      "policyId": str(clientPlan["id"]),
       "rateLimitUplink": {"rate": upLimit},
       "rateLimitDownlink": {"rate": dnLimit}
     }
@@ -116,7 +120,7 @@ class UispSync(BillingSync):
     upLimit, dnLimit = self.getPlanLimits(clientPlan['uploadSpeed'], clientPlan['downloadSpeed'])
     return {
       "policyName": planName,
-      "policyId": str(clientPlan["id"]+1000),
+      "policyId": str(clientPlan["id"]),
       "rateLimitUplink": {"rate": upLimit},
       "rateLimitDownlink": {"rate": dnLimit}
     }
@@ -216,14 +220,16 @@ class UispSync(BillingSync):
           elif len(match) == 0: 
             # create automatic policy
             autoPolicy = self.getAutoPolicy(cp)
-            data["policies"].append(autoPolicy)
             ratePolicy = autoPolicy["policyName"]
+            if len([x for x in data["policies"] if x['policyName'] == autoPolicy["policyName"]]) == 0:
+              data["policies"].append(autoPolicy)
           else:
             raise Exception("Duplicated policy Name")
         else: # create override policy
           overridePolicy = self.getOverridePolicy(cp)
-          data["policies"].append(overridePolicy)
           ratePolicy = overridePolicy["policyName"]
+          if len([x for x in data["policies"] if x['policyName'] == overridePolicy["policyName"]]) == 0:
+            data["policies"].append(overridePolicy)
         ipAddresses = self.getSubscriberIps(cp, devices, sites)
         for ip in ipAddresses:
           subscriber = {}
@@ -270,6 +276,8 @@ if __name__ == "__main__":
 
   billingSync = UispSync(args.verbose)
 
+  billingSync.logger.warning("%s synchronization script starts (v1.6)" % datetime.datetime.now())
+
   plans = billingSync.getUcrmEntries(args.uisp, args.key, '/service-plans')
   clients = billingSync.getUcrmEntries(args.uisp, args.key, '/clients')
   services = billingSync.getUcrmEntries(args.uisp, args.key, '/clients/services')
@@ -281,6 +289,7 @@ if __name__ == "__main__":
   if args.bqn:
     billingSync.updateBqn(args.bqn[0], args.bqn[1], args.bqn[2], data)
 
+  billingSync.logger.warning("%s synchronization script ends" % datetime.datetime.now())
 
 
 

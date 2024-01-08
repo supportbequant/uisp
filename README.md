@@ -70,8 +70,9 @@ You can check the script log in the BQN:
 ```
 ssh root@<BQN-OAM-IP>
 less /tmp/sync-uisp-bqn.log
-Synchronization at 2024-01-03 18:40:02.059393 with script v1.5
-Synchronization at 2024-01-03 18:40:19.251052 of 26 policies and 649 subscribers
+2024-01-08 12:42:02.430413 synchronization script starts (v1.6)
+2024-01-08 12:42:12.478919 synchronization of 15 policies and 327 subscribers
+2024-01-08 12:42:12.479752 synchronization script ends
 ```
 
 To see the policies and subscribers created in the BQN server, see the section

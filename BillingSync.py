@@ -27,7 +27,6 @@ import datetime
 ################################################################################
 
 class BillingSync:
-
   BLOCK_POLICY = "Billing-Block"
 
   ############################################################################
@@ -42,7 +41,6 @@ class BillingSync:
       self.logger.setLevel(logging.DEBUG)
     #logging.basicConfig(stream=sys.stdout, format='%(asctime)s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S')
     logging.basicConfig(stream=sys.stdout, format='%(message)s')
-    self.logger.warning("Synchronization at %s with script v1.5" % datetime.datetime.now())
 
   ############################################################################
 
@@ -130,7 +128,7 @@ class BillingSync:
 
   ############################################################################
 
-  def printData(self, data):
+  def printSubscriberPolicies(self, data):
     # Calculate size of columns as maximum length of the values to display
     # When the column header may be wider than the displayed values, it is
     # also considered.
@@ -142,14 +140,14 @@ class BillingSync:
     tableSizes.append( len( max(list(str(x["policyId"]) for x in data["policies"]), key=len) ) )
     tableSizes.append( len( max(list(str(x["rateLimitDownlink"]["rate"]) for x in data["policies"]) + ["Dn Kbps"], key=len) ) )
     tableSizes.append( len( max(list(str(x["rateLimitUplink"]["rate"]) for x in data["policies"]) + ["Up Kbps"], key=len) ) )
-    tableSizes.append( len( max(list(str(x["state"]) for x in data["subscribers"]), key=len) ) )
+    tableSizes.append( max(len( max(list(str(x["state"]) for x in data["subscribers"]), key=len) ), len("state") ) )
     tableSizes.append( len("Block") )
     tableSizes.append( len( max(list(str(x["subscriberId"]) for x in data["subscribers"]), key=len) ) )
 
     rowFormat = ''
     for size in tableSizes:
       rowFormat += "{:<%d}" % (size + 1)
-    self.logger.info(rowFormat.format("IP"
+    self.logger.info("\n" + rowFormat.format("IP"
                                       ,"PLAN"
                                       ,"Id"
                                       ,"Dn Kbps"
@@ -158,6 +156,7 @@ class BillingSync:
                                       ,"block"
                                       ,"Name"))
 
+  
     for s in data["subscribers"]:
       matches = [x for x in data["policies"] if x["policyName"] == s["policyRate"]]
       if len(matches) == 1:
@@ -177,6 +176,36 @@ class BillingSync:
                                         ,s["state"]
                                         ,"yes" if s["block"] else "no"
                                         ,s["subscriberId"]))
+
+  ############################################################################
+
+  def printSubscriberGroups(self, data):
+    # Calculate size of columns as maximum length of the values to display
+    # Subscriber groups have no size limit (at the end of the table)
+ 
+    tableSizes = []
+    tableSizes.append( len( max(list(x["subscriberIp"] for x in data["subscribers"]), key=len) ) )
+    tableSizes.append( len( max(list(str(x["subscriberId"]) for x in data["subscribers"]), key=len) ) )
+
+    rowFormat = ''
+    for size in tableSizes:
+      rowFormat += "{:<%d}" % (size + 1)
+    self.logger.info("\n" + rowFormat.format("IP"
+                                      ,"Name") + " Groups")
+
+    for s in data["subscribers"]:
+      subGroups = ""
+      for group in s["subscriberGroups"]:
+        subGroups += " %s" % group
+      self.logger.info(rowFormat.format(s["subscriberIp"]
+                                        ,s["subscriberId"]) + subGroups)
+
+
+  ############################################################################
+
+  def printData(self, data):
+    self.printSubscriberPolicies(data)
+    self.printSubscriberGroups(data)
 
   ############################################################################
 
@@ -272,7 +301,7 @@ class BillingSync:
       self.printResponseDetails(rsp) 
       updatedSubscribers += 1
 
-    self.logger.warning("Synchronization at %s of %d policies and %d subscribers" % \
+    self.logger.warning("%s synchronization of %d policies and %d subscribers" % \
                  (datetime.datetime.now(), updatedPolicies, updatedSubscribers))
 
   ################################################################################
