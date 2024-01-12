@@ -197,8 +197,9 @@ class BillingSync:
       subGroups = ""
       for group in s["subscriberGroups"]:
         subGroups += " %s" % group
-      self.logger.info(rowFormat.format(s["subscriberIp"]
-                                        ,s["subscriberId"]) + subGroups)
+      if len(subGroups) > 0:
+        self.logger.info(rowFormat.format(s["subscriberIp"]
+                                         ,s["subscriberId"]) + subGroups)
 
 
   ############################################################################
