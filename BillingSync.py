@@ -137,12 +137,12 @@ class BillingSync:
     tableSizes = []
     tableSizes.append( len( max(list(x["subscriberIp"] for x in data["subscribers"]), key=len) ) )
     tableSizes.append( len( max(list(x["policyName"] for x in data["policies"]), key=len) ) )
-    tableSizes.append( len( max(list(str(x["policyId"]) for x in data["policies"]), key=len) ) )
-    tableSizes.append( len( max(list(str(x["rateLimitDownlink"]["rate"]) for x in data["policies"]) + ["Dn Kbps"], key=len) ) )
-    tableSizes.append( len( max(list(str(x["rateLimitUplink"]["rate"]) for x in data["policies"]) + ["Up Kbps"], key=len) ) )
+    tableSizes.append( len( max(list(str(x["policyId"]) for x in data["policies"] if "policyId" in x), key=len) ) )
+    tableSizes.append( len( max(list(str(x["rateLimitDownlink"]["rate"]) for x in data["policies"] if "rateLimitDownlink" in x) + ["Dn Kbps"], key=len) ) )
+    tableSizes.append( len( max(list(str(x["rateLimitUplink"]["rate"]) for x in data["policies"] if "rateLimitUplink" in x) + ["Up Kbps"], key=len) ) )
     tableSizes.append( max(len( max(list(str(x["state"]) for x in data["subscribers"]), key=len) ), len("state") ) )
     tableSizes.append( len("Block") )
-    tableSizes.append( len( max(list(str(x["subscriberId"]) for x in data["subscribers"]), key=len) ) )
+    tableSizes.append( len( max(list(str(x["subscriberId"]) for x in data["subscribers"] if "subscriberId" in x), key=len) ) )
 
     rowFormat = ''
     for size in tableSizes:
@@ -170,12 +170,12 @@ class BillingSync:
         }
       self.logger.info(rowFormat.format(s["subscriberIp"]
                                         ,policy["policyName"]
-                                        ,policy["policyId"]
+                                        ,policy["policyId"] if "policyId" in policy else "n/a"
                                         ,policy["rateLimitDownlink"]["rate"] if "rateLimitDownlink" in policy else "n/a"
                                         ,policy["rateLimitUplink"]["rate"] if "rateLimitUplink" in policy else "n/a"
                                         ,s["state"]
                                         ,"yes" if s["block"] else "no"
-                                        ,s["subscriberId"]))
+                                        ,s["subscriberId"] if "subscriberId" in s else "n/a"))
 
   ############################################################################
 
@@ -270,7 +270,7 @@ class BillingSync:
       if len(matches) > 0:
         if len(matches) > 1:
           self.logger.warning("Policy %s found more than once, taking first one" % p["policyName"])
-        if self.areEqual(matches[0], p, ["policyId","rateLimitDownlink", "rateLimitUplink"]):
+        if self.areEqual(matches[0], p, ["policyId", "rateLimitDownlink", "rateLimitUplink"]):
           continue
       self.logger.debug("Create policy %s" % p["policyId"])
       policyName = requests.utils.quote(p["policyName"], safe='')  # Empty safe char list, so / is not regarded as safe and encoded as well
