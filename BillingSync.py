@@ -14,15 +14,45 @@
 #
 ################################################################################
 
-# Avoid insecure warning when issuing REST queries
-#import urllib3
-#urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-import requests
 import json
 import logging
 import sys
 import datetime
+import os
+
+import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.ssl_ import create_urllib3_context
+
+################################################################################
+
+class BqnRestAdapter(HTTPAdapter):
+    """
+    Adapter to control the level of security of SSL sessions of HTTPS requests.
+    Needed to avoid issues depending on the python/requests/openssl versions.
+    """
+    # We use python 3.7 defaults
+    CIPHERS = ('DEFAULT:!aNULL:!eNULL:!MD5:!3DES:!DES:!RC4:!IDEA:!SEED:!aDSS:!SRP:!PSK')
+
+    def init_poolmanager(self, connections, maxsize, block=False):
+      context = create_urllib3_context(ciphers=BqnRestAdapter.CIPHERS)
+      context.check_hostname = False
+      pool = super(BqnRestAdapter, self)
+      pool.init_poolmanager(connections=connections,
+              maxsize=maxsize,
+              block=block,
+              ssl_context=context)
+      return pool
+
+    def proxy_manager_for(self, connections, maxsize, block=False):
+      context = create_urllib3_context(ciphers=BqnRestAdapter.CIPHERS)
+      context.check_hostname = False
+      pool = super(BqnRestAdapter, self)
+      pool.proxy_manager_for(connections=connections,
+              maxsize=maxsize,
+              block=block,
+              ssl_context=context)
+      return pool
 
 ################################################################################
 
@@ -136,10 +166,15 @@ class BillingSync:
     # list item with the maximum length and finally get that length.
     tableSizes = []
     tableSizes.append( len( max(list(x["subscriberIp"] for x in data["subscribers"]), key=len) ) )
-    tableSizes.append( len( max(list(x["policyName"] for x in data["policies"]), key=len) ) )
-    tableSizes.append( len( max(list(str(x["policyId"]) for x in data["policies"] if "policyId" in x), key=len) ) )
-    tableSizes.append( len( max(list(str(x["rateLimitDownlink"]["rate"]) for x in data["policies"] if "rateLimitDownlink" in x) + ["Dn Kbps"], key=len) ) )
-    tableSizes.append( len( max(list(str(x["rateLimitUplink"]["rate"]) for x in data["policies"] if "rateLimitUplink" in x) + ["Up Kbps"], key=len) ) )
+    tableSizes.append( len( max(list(x["policyRate"] for x in data["subscribers"]), key=len) ) )
+    if len(data["policies"]) > 0:
+      tableSizes.append( len( max(list(str(x["policyId"]) for x in data["policies"] if "policyId" in x), key=len) ) )
+      tableSizes.append( len( max(list(str(x["rateLimitDownlink"]["rate"]) for x in data["policies"] if "rateLimitDownlink" in x) + ["Dn Kbps"], key=len) ) )
+      tableSizes.append( len( max(list(str(x["rateLimitUplink"]["rate"]) for x in data["policies"] if "rateLimitUplink" in x) + ["Up Kbps"], key=len) ) )
+    else: # No policies defined, policy Id n/a
+      tableSizes.append( len( "Plan Id") )
+      tableSizes.append( len( "Dn Kbps" ) )
+      tableSizes.append( len( "Up Kbps" ) )
     tableSizes.append( max(len( max(list(str(x["state"]) for x in data["subscribers"]), key=len) ), len("state") ) )
     tableSizes.append( len("Block") )
     tableSizes.append( len( max(list(str(x["subscriberId"]) for x in data["subscribers"] if "subscriberId" in x), key=len) ) )
@@ -148,12 +183,12 @@ class BillingSync:
     for size in tableSizes:
       rowFormat += "{:<%d}" % (size + 1)
     self.logger.info("\n" + rowFormat.format("IP"
-                                      ,"PLAN"
-                                      ,"Id"
+                                      ,"Plan"
+                                      ,"Plan Id"
                                       ,"Dn Kbps"
                                       ,"Up Kbs"
-                                      ,"state"
-                                      ,"block"
+                                      ,"State"
+                                      ,"Block"
                                       ,"Name"))
 
   
@@ -194,6 +229,8 @@ class BillingSync:
                                       ,"Name") + " Groups")
 
     for s in data["subscribers"]:
+      if not "subscriberGroups" in s:
+        continue
       subGroups = ""
       for group in s["subscriberGroups"]:
         subGroups += " %s" % group
@@ -242,6 +279,18 @@ class BillingSync:
   ############################################################################
 
   def updateBqn(self, bqnIp, bqnUser, bqnPassword, data):
+
+    uriRoot = "https://" + bqnIp + ":3443/api/v1"
+    session = requests.Session()
+    session.verify = False
+    session.auth = (bqnUser, bqnPassword)
+    session.headers =  {
+      "Content-Type": "application/json; charset=utf-8",
+      "Accept-Charset": "utf-8"
+    }
+    # To support TLS1.2 (python default too stringent)
+    session.mount(uriRoot, BqnRestAdapter())
+
     updatedPolicies = 0
     updatedSubscribers = 0
 
@@ -256,14 +305,8 @@ class BillingSync:
       if s["block"]:
         s["policyRate"] = BillingSync.BLOCK_POLICY
 
-    bqnUrl = "https://" + bqnIp + ":3443/api/v1"
-    bqnHeaders = {
-      "Content-Type": "application/json; charset=utf-8", 
-      "Accept-Charset": "utf-8"
-    }
-
-    self.logger.info("Create policies is %s" % bqnUrl)
-    rsp = requests.get(bqnUrl + "/policies/rate", headers=bqnHeaders, auth=(bqnUser, bqnPassword), verify=False)
+    self.logger.info("Create policies is %s" % uriRoot)
+    rsp = session.get(uriRoot + "/policies/rate")
     polsInBqn = rsp.json()["items"]
     for p in data["policies"]:
       matches = [x for x in polsInBqn if x["policyName"] == p["policyName"]]
@@ -275,30 +318,32 @@ class BillingSync:
       self.logger.debug("Create policy %s" % p["policyId"])
       policyName = requests.utils.quote(p["policyName"], safe='')  # Empty safe char list, so / is not regarded as safe and encoded as well
       payload = self.jsonDumps(p)
-      rsp = requests.post(bqnUrl + "/policies/rate/" + policyName, headers=bqnHeaders, data=payload, auth=(bqnUser, bqnPassword), verify=False) 
+      rsp = session.post(uriRoot + "/policies/rate/" + policyName, data=payload)
       self.printResponseDetails(rsp)
       updatedPolicies += 1
     # Generate a block policy to enforce inactive clients
     matches = [x for x in polsInBqn if x["policyName"] == BillingSync.BLOCK_POLICY]
     if len(matches) == 0:
       payload = self.jsonDumps({"policyId": "block", "rateLimitDownlink": {"rate": 0}, "rateLimitUplink": {"rate": 0}})
-      rsp = requests.post(bqnUrl + "/policies/rate/" + BillingSync.BLOCK_POLICY, headers=bqnHeaders, data=payload, auth=(bqnUser, bqnPassword), verify=False) 
+      rsp = session.post(uriRoot + "/policies/rate/" + BillingSync.BLOCK_POLICY, data=payload)
       self.printResponseDetails(rsp)
 
-    rsp = requests.get(bqnUrl + "/subscribers", headers=bqnHeaders, auth=(bqnUser, bqnPassword), verify=False)
+    rsp = session.get(uriRoot + "/subscribers")
     subsInBqn = rsp.json()["items"]
-    self.logger.info("Create subscribers in %s" % bqnUrl)
+    self.logger.info("Create subscribers in %s" % uriRoot)
     for s in data["subscribers"]:
       matches = [x for x in subsInBqn if x["subscriberIp"] == s["subscriberIp"]]
       # If more than one match, we take first one
       if len(matches) > 0:
         if len(matches) > 1:
-          self.logger.warning("Subscriber %s found more than once, taking first one" % s["subscriberIp"])
+          self.logger.warning("Subscriber %s found in BQN more than once, taking first one" % s["subscriberIp"])
         if self.areEqual(matches[0], s, ["subscriberId", "policyRate", "subscriberGroups"]):
           continue
+        self.logger.debug("Subscriber changed. In BQN: %s" % matches[0])
+        self.logger.debug("                In billing: %s" % s)
       self.logger.debug("Create subscriber %s" % s["subscriberIp"])
       payload = self.jsonDumps(s)
-      rsp = requests.post(bqnUrl + "/subscribers/" + s["subscriberIp"], headers=bqnHeaders, data=payload, auth=(bqnUser, bqnPassword), verify=False)
+      rsp = session.post(uriRoot + "/subscribers/" + s["subscriberIp"], data=payload)
       self.printResponseDetails(rsp) 
       updatedSubscribers += 1
 

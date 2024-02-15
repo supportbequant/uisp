@@ -232,6 +232,10 @@ class UispSync(BillingSync):
             data["policies"].append(overridePolicy)
         ipAddresses = self.getSubscriberIps(cp, devices, sites)
         for ip in ipAddresses:
+          # If duplicated IP, ignore and warn
+          if len( [x for x in data["subscribers"] if x["subscriberIp"] == ip['address']] ) > 0:
+            self.logger.warning("Plan with a duplicated IP %s ignored (customer %s)" % (ip['address'], self.getSubscriberId(c)))
+            continue
           subscriber = {}
           subscriber["policyRate"] = ratePolicy
           subscriber["subscriberId"] = self.getSubscriberId(c)
