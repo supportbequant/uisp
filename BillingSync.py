@@ -19,6 +19,7 @@ import logging
 import sys
 import datetime
 import os
+import platform
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -288,8 +289,10 @@ class BillingSync:
       "Content-Type": "application/json; charset=utf-8",
       "Accept-Charset": "utf-8"
     }
+    py_version = platform.python_version().split('.')
     # To support TLS1.2 (python default too stringent)
-    session.mount(uriRoot, BqnRestAdapter())
+    if int(py_version[1]) >= 7:
+      session.mount(uriRoot, BqnRestAdapter())
 
     updatedPolicies = 0
     updatedSubscribers = 0
