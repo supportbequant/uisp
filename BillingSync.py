@@ -23,7 +23,9 @@ import platform
 
 import requests
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.util.ssl_ import create_urllib3_context
+PY_VERSION = platform.python_version().split('.')
+if int(PY_VERSION[1]) >= 7:  # 3.7 or more
+  from requests.packages.urllib3.util.ssl_ import create_urllib3_context
 
 ################################################################################
 
@@ -291,7 +293,7 @@ class BillingSync:
     }
     py_version = platform.python_version().split('.')
     # To support TLS1.2 (python default too stringent)
-    if int(py_version[1]) >= 7:
+    if int(PY_VERSION[1]) >= 7:  # 3.7 or more
       session.mount(uriRoot, BqnRestAdapter())
 
     updatedPolicies = 0
