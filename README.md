@@ -9,13 +9,14 @@ using the UISP REST API and update the BQN server using the BQN REST API.
 
 ### Prerequisites
 
-1. BQN with packages linux-R3.0.13-2-20231130 or later and bqn-R4.18.8 or later.
+1. BQN with packages linux-R3.0.13-20231130 or later and bqn-R4.18.8 or later.
 
 2. BQN with REST API enabled (see https://www.bequant.com/docs/rest#rest-configuration).
 
-3. UISP with REST API enabled with access to both NMS and CRM. A common API KEY 
-for both types of access must be created.
+3. BQN with a DNS server configured (see https://www.bequant.com/docs/initial-configuration#changing-the-management-ip-address).
 
+4. UISP with REST API enabled with access to both NMS and CRM. A common API KEY 
+for both types of access must be created.
 
 ### Steps
 
@@ -58,7 +59,16 @@ UISP_KEY=5a15d248-376b-1324-cd15-24ad3a37be31
 scp ./uisp-main/BillingSync.py  ./uisp-main/sync-uisp-bqn ./uisp-main/sync-uisp-bqn.sh root@<BQN-OAM-IP>:uisp
 ```
 
-6. In the BQN, copy sync-uisp-bqn.sh to the crontab directory so it is executed every 5 minutes:
+6. Make sure the following files are executable in BQN:
+```
+ssh root@<BQN-OAM-IP>
+cd uisp
+chmod a+x ./uisp-main/sync-uisp-bqn
+chnod a+x ./uisp-main/sync-uisp-bqn.sh
+exit
+```
+
+7. In the BQN, copy sync-uisp-bqn.sh to the crontab directory so it is executed every 5 minutes:
 ```
 ssh root@<BQN-OAM-IP>
 cp uisp/sync-uisp-bqn.sh /bqn/root/etc/cron.5
