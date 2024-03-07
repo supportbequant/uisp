@@ -291,7 +291,6 @@ class BillingSync:
       "Content-Type": "application/json; charset=utf-8",
       "Accept-Charset": "utf-8"
     }
-    py_version = platform.python_version().split('.')
     # To support TLS1.2 (python default too stringent)
     if int(PY_VERSION[1]) >= 7:  # 3.7 or more
       session.mount(uriRoot, BqnRestAdapter())
