@@ -341,6 +341,8 @@ class BillingSync:
       if len(matches) > 0:
         if len(matches) > 1:
           self.logger.warning("Subscriber %s found in BQN more than once, taking first one" % s["subscriberIp"])
+        if not "all-subscribers" in s["subscriberGroups"]:  # Add all subscribers for exact comparison
+          s["subscriberGroups"].insert(0, "all-subscribers")
         if self.areEqual(matches[0], s, ["subscriberId", "policyRate", "subscriberGroups"]):
           continue
         self.logger.debug("Subscriber changed. In BQN: %s" % matches[0])

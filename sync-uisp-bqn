@@ -185,17 +185,24 @@ class UispSync(BillingSync):
       upLimit, dnLimit = self.getPlanLimits(p["uploadSpeed"], p["downloadSpeed"])
       match = [x for x in data["policies"] if x['policyName'] == p['name']]
       if len(match) != 0:
-        if match[0]["rateLimitUplink"]["rate"] == upLimit and \
-           match[0]["rateLimitDownlink"]["rate"] == dnLimit:
-          self.logger.debug("Ignore plan %s with repeated name" % p['name'])
-        else:
-          self.logger.warning("Two plans with same name (%s) and different limits (%d/%d instead of %d/%d)" %
-                            (p['name'],
+        # Conflict (log and continue)
+        if match[0]["policyId"] == str(p["id"]) and (match[0]["rateLimitUplink"]["rate"] != upLimit or \
+           match[0]["rateLimitDownlink"]["rate"] != dnLimit):
+          self.logger.warning("Two plans with same id (%s) and name (%s) and different limits (%d/%d instead of %d/%d)" %
+                            (p["id"], p['name'],
                              match[0]["rateLimitUplink"]["rate"],
                              match[0]["rateLimitDownlink"]["rate"],
                              upLimit,
                              dnLimit))
-        continue
+          continue
+        # Same name with different limits, make name unique
+        elif match[0]["policyId"] != str(p["id"]) and match[0]["rateLimitUplink"]["rate"] == upLimit and \
+           match[0]["rateLimitDownlink"]["rate"] == dnLimit:
+          p["name"] += "-%d" % p["id"]
+        # Already in policy array, continue
+        else:
+          continue
+      # Add new policy
       policy = {
         "policyName": p["name"],
         "policyId": str(p["id"]),
@@ -219,7 +226,7 @@ class UispSync(BillingSync):
       for cp in match:
         # Get subscriber policy
         if not cp['trafficShapingOverrideEnabled']:
-          match = [x for x in data["policies"] if x['policyName'] == cp['servicePlanName']]
+          match = [x for x in data["policies"] if x['policyId'] == str(cp['servicePlanId'])]
           if len(match) == 1:
             ratePolicy = cp['servicePlanName']
           elif len(match) == 0: 
@@ -263,11 +270,12 @@ if __name__ == "__main__":
 
   Requires an API KEY in UISP and the REST API enabled in BQN.
 
-  TODO: review
-
   BQN Rate policies are identified by UISP plan "name", with spaces replaced by undescores.
   BQN subscribers are identified by "firsName" and "lastName".
   Plans in status other that active or suspended have their traffic blocked by BQN.
+  We correlate UISP plans with clients using client service "clientId" and "servicePlanId". 
+  If a service make a reference to a non-existing plan, the plan is created automatically.
+  If a service indicates "trafficShapingOverrideEnabled", an override plan is created.
 
   Known limitations:
   - Synchronization may take several minutes.
@@ -285,7 +293,7 @@ if __name__ == "__main__":
 
   billingSync = UispSync(args.verbose)
 
-  billingSync.logger.warning("%s synchronization script starts (v1.6)" % datetime.datetime.now())
+  billingSync.logger.warning("%s synchronization script starts (v1.7)" % datetime.datetime.now())
 
   plans = billingSync.getUcrmEntries(args.uisp, args.key, '/service-plans')
   clients = billingSync.getUcrmEntries(args.uisp, args.key, '/clients')
