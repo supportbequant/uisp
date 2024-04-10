@@ -189,7 +189,12 @@ class UispSync(BillingSync):
            match[0]["rateLimitDownlink"]["rate"] == dnLimit:
           self.logger.debug("Ignore plan %s with repeated name" % p['name'])
         else:
-          self.logger.error("Two plans with same name and different limits" % p['name'])
+          self.logger.warning("Two plans with same name (%s) and different limits (%d/%d instead of %d/%d)" %
+                            (p['name'],
+                             match[0]["rateLimitUplink"]["rate"],
+                             match[0]["rateLimitDownlink"]["rate"],
+                             upLimit,
+                             dnLimit))
         continue
       policy = {
         "policyName": p["name"],
