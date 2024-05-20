@@ -73,6 +73,7 @@ exit
 ssh root@<BQN-OAM-IP>
 cp uisp/sync-uisp-bqn.sh /bqn/root/etc/cron.5
 ``` 
+8. If DNS is needed (BQN server or UISP use domain names), verify that the BQN has the DNS configured (see [DNS configuration](https://www.bequant.com/docs/initial-configuration#changing-the-management-ip-address)).
 
 And that's all, the script will access the UISP every 5 minutes and update the BQN accordingly.
 You can check the script log in the BQN:
@@ -107,7 +108,15 @@ scp ./uisp-main/BillingSync.py  ./uisp-main/sync-uisp-bqn root@<BQN-OAM-IP>:uisp
 ```
 Where \<BQN-OAM-IP\> is the management IP address of the BQN server. NOTE 
 that the sync-uisp-bqn.sh MUST NOT be updated.
- 
+
+4. Make sure the following updated file remains executable in BQN:
+```
+ssh root@<BQN-OAM-IP>
+cd uisp
+chmod a+x ./uisp-main/sync-uisp-bqn
+exit
+```
+
 ## Known limitations
 
 - The first time it may take minutes to run. Following executions will send to BQN only client changes and will be quicker.
