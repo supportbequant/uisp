@@ -109,7 +109,7 @@ class UispSync(BillingSync):
     upLimit, dnLimit = self.getPlanLimits(clientPlan['uploadSpeedOverride'], clientPlan['downloadSpeedOverride'])
     return {
       "policyName": planName,
-      "policyId": str(clientPlan["id"]),
+      "policyId": str(clientPlan["id"]+2000),  # To avoid overlaps with normal policies
       "rateLimitUplink": {"rate": upLimit},
       "rateLimitDownlink": {"rate": dnLimit}
     }
@@ -120,7 +120,7 @@ class UispSync(BillingSync):
     upLimit, dnLimit = self.getPlanLimits(clientPlan['uploadSpeed'], clientPlan['downloadSpeed'])
     return {
       "policyName": planName,
-      "policyId": str(clientPlan["id"]),
+      "policyId": str(clientPlan["id"]+1000), # To avoid overlaps with normal policies
       "rateLimitUplink": {"rate": upLimit},
       "rateLimitDownlink": {"rate": dnLimit}
     }
@@ -195,7 +195,7 @@ class UispSync(BillingSync):
                              upLimit,
                              dnLimit))
           continue
-        # Same name with different limits, make name unique
+        # Same name with same limits, make name unique
         elif match[0]["policyId"] != str(p["id"]) and match[0]["rateLimitUplink"]["rate"] == upLimit and \
            match[0]["rateLimitDownlink"]["rate"] == dnLimit:
           p["name"] += "-%d" % p["id"]
@@ -295,11 +295,12 @@ if __name__ == "__main__":
 
   billingSync.logger.warning("%s synchronization script starts (v1.7)" % datetime.datetime.now())
 
-  plans = billingSync.getUcrmEntries(args.uisp, args.key, '/service-plans')
-  clients = billingSync.getUcrmEntries(args.uisp, args.key, '/clients')
-  services = billingSync.getUcrmEntries(args.uisp, args.key, '/clients/services')
-  devices = billingSync.getUnmsEntries(args.uisp, args.key, '/devices')
-  sites = billingSync.getUnmsEntries(args.uisp, args.key, '/sites')
+  uispHost = args.uisp.replace("https://", "")
+  plans = billingSync.getUcrmEntries(uispHost, args.key, '/service-plans')
+  clients = billingSync.getUcrmEntries(uispHost, args.key, '/clients')
+  services = billingSync.getUcrmEntries(uispHost, args.key, '/clients/services')
+  devices = billingSync.getUnmsEntries(uispHost, args.key, '/devices')
+  sites = billingSync.getUnmsEntries(uispHost, args.key, '/sites')
 
   data = billingSync.normalizeData(plans, clients, services, devices, sites)
   billingSync.printData(data)
