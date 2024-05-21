@@ -266,7 +266,7 @@ if __name__ == "__main__":
 
   parser = argparse.ArgumentParser(
     description="""
-  Synchronizes speed limits in Wispro contracts with BQN rate policies.
+  Synchronizes speed limits in UISP services with BQN rate policies.
 
   Requires an API KEY in UISP and the REST API enabled in BQN.
 
