@@ -315,7 +315,7 @@ if __name__ == "__main__":
 
   billingSync = UispSync(args.verbose)
 
-  billingSync.logger.warning("%s synchronization script starts (v1.7)" % datetime.datetime.now())
+  billingSync.logger.warning("%s synchronization script starts (v1.8)" % datetime.datetime.now())
 
   uispHost = args.uisp.replace("https://", "")
   plans = billingSync.getUcrmEntries(uispHost, args.key, '/service-plans')
