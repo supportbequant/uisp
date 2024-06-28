@@ -437,7 +437,7 @@ class BillingSync:
       session.mount(uriRoot, BqnRestAdapter())
 
     # Adapt data to BQN format
-    for item in data["policies"] + data["subscribers"]:
+    for item in data["policies"] + data["subscribers"] + data["subscriberGroups"]:
       self.normalize(item)
     # Add fields not treated by billing
     for p in data["policies"]:
