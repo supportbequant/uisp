@@ -170,7 +170,8 @@ class UispSync(BillingSync):
   ################################################################################
 
   def normalizeData(self, plans, clients, services, devices, sites):
-    data = {'subscribers': [], 'policies': []}
+    data = {'subscribers': [], 'policies': [], 'subscriberGroups': []}
+    subscriberGroups = {}
 
     # Policies
     #
@@ -244,9 +245,19 @@ class UispSync(BillingSync):
             data["policies"].append(overridePolicy)
         ipAddresses = self.getSubscriberIps(cp, devices, sites)
         for ip in ipAddresses:
-          # If duplicated IP, ignore and warn
-          if len( [x for x in data["subscribers"] if x["subscriberIp"] == ip['address']] ) > 0:
-            self.logger.warning("Plan with a duplicated IP %s ignored (customer %s)" % (ip['address'], self.getSubscriberId(c)))
+          match = [x for x in data["subscribers"] if x["subscriberIp"] == ip['address']] 
+          # If duplicated IP, ignore. Warn if with different subscribers or policies
+          if len(match) > 0:
+            for m in match:
+              if m["subscriberId"] != self.getSubscriberId(c):
+                self.logger.warning("Duplicated IP %s ignored (assigned to two different customers, %s and %s)" % \
+                         (m["subscriberIp"], m["subscriberId"], self.getSubscriberId(c)))
+              elif m["policyRate"] != ratePolicy:
+                self.logger.warning("Duplicated IP %s in subscriber %s ignored (assigned to two different plans, %s and %s)" % \
+                         (m["subscriberIp"], m["subscriberId"], m["policyRate"], ratePolicy))
+              else:
+                # Same customer, same policy, IP silently discarded.
+                pass
             continue
           subscriber = {}
           subscriber["policyRate"] = ratePolicy
@@ -254,9 +265,20 @@ class UispSync(BillingSync):
           subscriber["state"] = cp["status"]
           subscriber["block"] = cp['status'] != UispSync.STATUS_ACTIVE and cp['status'] != UispSync.STATUS_SUSPENDED
           subscriber["subscriberIp"] = ip['address']
-          subscriber["subscriberGroups"] = ip['groups']
           # Done, add subscriber to the data structure
           data["subscribers"].append(subscriber)
+          # Subscriber groups
+          for grp in ip['groups']:
+            if grp in subscriberGroups:
+              subscriberGroups[grp]["subscriberMembers"].append(ip['address'])
+            else:
+              subscriberGroups[grp] = {
+                "subscriberGroupName": grp,
+                "subscriberMembers": [ip['address']]
+              }
+    
+    # Convert subscriber group dictionary values to a list
+    data["subscriberGroups"] = list(subscriberGroups.values())
 
     return data
 
