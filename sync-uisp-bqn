@@ -309,13 +309,15 @@ if __name__ == "__main__":
                       nargs=3, metavar=('BQN-IP', 'REST-USER', 'REST-PW'), dest='bqn')
   parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
                     help="Display extra informationt (repeat for increased verbosity)")
+  parser.add_argument('-lf', '--log-file', default=None, type=str, dest="logFile",
+      help='Log file to use. If absent, logs go to the standard output')
   parser.add_argument('uisp', metavar='UISP-HOST', type=str, help='UISP URL')
   parser.add_argument('key', metavar='API-KEY', type=str, help=' REST API key')
   args = parser.parse_args()
 
-  billingSync = UispSync(args.verbose)
+  billingSync = UispSync(args.verbose, args.logFile)
 
-  billingSync.logger.warning("%s synchronization script starts (v1.8)" % datetime.datetime.now())
+  billingSync.logger.warning("%s synchronization script starts (v2.0)" % datetime.datetime.now())
 
   uispHost = args.uisp.replace("https://", "")
   plans = billingSync.getUcrmEntries(uispHost, args.key, '/service-plans')

@@ -16,6 +16,7 @@
 
 import json
 import logging
+import logging.handlers
 import sys
 import datetime
 import platform
@@ -63,16 +64,21 @@ class BillingSync:
 
   ############################################################################
 
-  def __init__(self, verbose):
+  def __init__(self, verbose, logFile=None):
     self.logger = logging.getLogger(__name__)
-    if verbose == 0:
-      self.logger.setLevel(logging.WARNING)
-    elif verbose == 1:
-      self.logger.setLevel(logging.INFO)
+    logLevel = logging.WARNING
+    if verbose == 1:
+      logLevel = logging.INFO
+    elif verbose > 1:
+      logLevel = logging.DEBUG
+    if logFile:
+      logging.basicConfig(
+                    format='%(message)s',
+                    level=logLevel,
+                    handlers=[logging.handlers.RotatingFileHandler(logFile, maxBytes=5*10**8, backupCount=10)]
+      )
     else:
-      self.logger.setLevel(logging.DEBUG)
-    #logging.basicConfig(stream=sys.stdout, format='%(asctime)s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S')
-    logging.basicConfig(stream=sys.stdout, format='%(message)s')
+      logging.basicConfig(stream=sys.stdout, format='%(message)s', level=logLevel)
 
   ############################################################################
 
@@ -322,103 +328,166 @@ class BillingSync:
 
   ############################################################################
 
+  def bqnApiRest(self, session, method, uri, id, entry=None):
+    safeId = requests.utils.quote(id, safe='')  # Empty safe char list, so / is not regarded as safe and encoded as well
+
+    if method == 'post':
+      rsp = session.post(uri + safeId, data=self.jsonDumps(entry))
+      self.printResponseDetails(rsp)
+    elif method == 'put':
+      rsp = session.put(uri + safeId, data=self.jsonDumps(entry))
+      self.printResponseDetails(rsp)
+    elif method == 'get':
+      rsp = session.get(uri + safeId)
+      self.printResponseDetails(rsp)
+    elif method == 'delete':
+      rsp = session.delete(uri + safeId)
+      self.printResponseDetails(rsp)
+    else:
+      self.logger.debug("Unknown BQN API REST method %s" % method)
+  
+  ############################################################################
+
   def updateBqnPolicies(self, uriRoot, session, data):
-    updates = 0
+    creations = 0
+    modifications = 0
+    deletions = 0
+    polsInBqn = {}
 
     if not "policies" in data or len(data["policies"]) == 0:
       self.logger.debug("No policy information to update")
-      return updates
+      return
 
     rsp = session.get(uriRoot + "/policies/rate")
     if rsp.status_code == 200:
-      polsInBqn = rsp.json()["items"]
-    else:
-      polsInBqn = []
+      for p in rsp.json()["items"]:
+        polsInBqn[p["policyName"]] = {"policy": p, "inBilling": False}
+
+    self.logger.info("%s start synchronization of policies into %s" % (datetime.datetime.now(), uriRoot))
     for p in data["policies"]:
-      matches = [x for x in polsInBqn if x["policyName"] == p["policyName"]]
-      if len(matches) > 0:
-        if len(matches) > 1:
-          self.logger.warning("Policy %s found more than once, taking first one" % p["policyName"])
-        if self.areEqual(matches[0], p, ["policyId", "rateLimitDownlink", "rateLimitUplink"]):
-          continue
-      self.logger.debug("Create policy %s" % p["policyId"])
-      policyName = requests.utils.quote(p["policyName"], safe='')  # Empty safe char list, so / is not regarded as safe and encoded as well
-      payload = self.jsonDumps(p)
-      rsp = session.post(uriRoot + "/policies/rate/" + policyName, data=payload)
-      self.printResponseDetails(rsp)
-      updates += 1
+      if not p["policyName"] in polsInBqn:
+        self.logger.debug("Create policy %s" % p["policyId"])
+        self.bqnApiRest(session, 'post', uriRoot + "/policies/rate/", p["policyName"], p)
+        polsInBqn[p["policyName"]] = {"policy": p, "inBilling": True}
+        creations += 1
+      else:
+        match = polsInBqn[p["policyName"]]["policy"]
+        polsInBqn[p["policyName"]]["inBilling"] = True
+        if not self.areEqual(match, p, ["policyId", "rateLimitDownlink", "rateLimitUplink"]):
+          self.logger.debug("Policy changed. In BQN: %s" % match)
+          self.logger.debug("            In Billing: %s" % p)
+          self.logger.debug("Modify policy %s" % p["policyName"])
+          self.bqnApiRest(session, 'post', uriRoot + "/policies/rate/", p["policyName"], p)
+          modifications += 1
+
     # Generate a block policy to enforce inactive clients
-    matches = [x for x in polsInBqn if x["policyName"] == BillingSync.BLOCK_POLICY]
-    if len(matches) == 0:
+    if not BillingSync.BLOCK_POLICY in polsInBqn:
       payload = self.jsonDumps({"policyId": "block", "rateLimitDownlink": {"rate": 0}, "rateLimitUplink": {"rate": 0}})
       rsp = session.post(uriRoot + "/policies/rate/" + BillingSync.BLOCK_POLICY, data=payload)
       self.printResponseDetails(rsp)
 
-    return updates
+    # Delete policies no longer in billing (except blocking)
+    for key in polsInBqn:
+      if key != BillingSync.BLOCK_POLICY and not polsInBqn[key]["inBilling"]:
+        self.bqnApiRest(session, 'delete', uriRoot + "/policies/rate/", key)
+        deletions += 1
+
+    self.logger.warning("%s policy synchronization: %d created, %d updated and %d deleted" % \
+                        (datetime.datetime.now(), creations, modifications, deletions))
 
   ############################################################################
 
   def updateBqnSubscribers(self, uriRoot, session, data):
-    updates = 0
+    creations = 0
+    modifications = 0
+    deletions = 0
+    subsInBqn = {}
 
     if not "subscribers" in data or len(data["subscribers"]) == 0:
       self.logger.debug("No subscriber information to update")
-      return updates
+      return
 
     rsp = session.get(uriRoot + "/subscribers")
     if rsp.status_code == 200:
-      subsInBqn = rsp.json()["items"]
-    else:
-      subsInBqn = []
-    self.logger.info("Create subscribers in %s" % uriRoot)
-    for s in data["subscribers"]:
-      matches = [x for x in subsInBqn if x["subscriberIp"] == s["subscriberIp"]]
-      # If more than one match, we take first one
-      if len(matches) > 0:
-        if len(matches) > 1:
-          self.logger.warning("Subscriber %s found in BQN more than once, taking first one" % s["subscriberIp"])
-        # subscriber group membership checked at subscriber group level
-        if self.areEqual(matches[0], s, ["subscriberId", "policyRate"]):
-          continue
-        self.logger.debug("Subscriber changed. In BQN: %s" % matches[0])
-        self.logger.debug("                In billing: %s" % s)
-      self.logger.debug("Create subscriber %s" % s["subscriberIp"])
-      payload = self.jsonDumps(s)
-      rsp = session.post(uriRoot + "/subscribers/" + s["subscriberIp"], data=payload)
-      self.printResponseDetails(rsp) 
-      updates += 1
+      for s in rsp.json()["items"]:
+        subsInBqn[s["subscriberIp"]] = {"subscriber": s, "inBilling": False}
 
-    return updates
+    self.logger.info("%s start synchronization of subscribers into %s" % (datetime.datetime.now(), uriRoot))
+    for s in data["subscribers"]:
+      if not s["subscriberIp"] in subsInBqn:
+        self.logger.debug("Create subscriber %s" % s["subscriberIp"])
+        self.bqnApiRest(session, 'post', uriRoot + "/subscribers/", s["subscriberIp"], s)
+        subsInBqn[s["subscriberIp"]] = {"subscriber": s, "inBilling": True}
+        creations += 1
+      else:
+        match = subsInBqn[s["subscriberIp"]]["subscriber"]
+        subsInBqn[s["subscriberIp"]]["inBilling"] = True        
+        # If no policy in billing and assigned by rules in BQN, no update of policy needed
+        if not s["policyRate"] and "policyAssignedBy" in match and match["policyAssignedBy"] == 'rules':
+          if not self.areEqual(match, s, ["subscriberId"]):
+            self.logger.debug("Subscriber changed. In BQN: %s" % match)
+            self.logger.debug("                In Billing: %s" % s)
+            self.logger.debug("Modify ID of subscriber %s" % s["subscriberIp"])
+            self.bqnApiRest(session, 'post', uriRoot + "/subscribers/", s["subscriberIp"], s)
+            modifications += 1
+        elif not self.areEqual(match, s, ["subscriberId", "policyRate"]):
+          self.logger.debug("Subscriber changed. In BQN: %s" % match)
+          self.logger.debug("                In Billing: %s" % s)
+          self.logger.debug("Modify subscriber %s" % s["subscriberIp"])
+          self.bqnApiRest(session, 'post', uriRoot + "/subscribers/", s["subscriberIp"], s)
+          modifications += 1
+
+    # Delete subscribers no longer in billing
+    for key in subsInBqn:
+      if not subsInBqn[key]["inBilling"]:
+        self.bqnApiRest(session, 'delete', uriRoot + "/subscribers/", key)
+        deletions += 1
+
+    self.logger.warning("%s subscriber synchronization: %d created, %d updated and %d deleted" % \
+                        (datetime.datetime.now(), creations, modifications, deletions))
 
   ############################################################################
 
   def updateBqnSubscriberGroups(self, uriRoot, session, data):
-    updates = 0
+    creations = 0
+    modifications = 0
+    deletions = 0
+    sgsInBqn = {}
 
     if not "subscriberGroups" in data or len(data["subscriberGroups"]) == 0:
       self.logger.debug("No subscriber group information to update")
-      return updates
+      return
 
     rsp = session.get(uriRoot + "/subscriberGroups")
     if rsp.status_code == 200:
-      sgsInBqn = rsp.json()["items"]
-    else:
-      sgsInBqn = []
+      for sg in rsp.json()["items"]:
+        sgsInBqn[sg["subscriberGroupName"]] = {"group": sg, "inBilling": False}
+
+    self.logger.info("%s start synchronization of subscriber groups into %s" % (datetime.datetime.now(), uriRoot))
     for sg in data["subscriberGroups"]:
-      matches = [x for x in sgsInBqn if x["subscriberGroupName"] == sg["subscriberGroupName"]]
-      if len(matches) > 0:
-        if len(matches) > 1:
-          self.logger.warning("Subscriber group %s found more than once, comparing with first one" % sg["subscriberGroupName"])
-        if self.areEqual(matches[0], sg, ["subscriberMembers", "subscriberRanges", "policyRate"]):
-          continue
-      self.logger.debug("Create subscriber group %s" %  sg["subscriberGroupName"])
-      groupName = requests.utils.quote(sg["subscriberGroupName"], safe='')  # Empty safe char list, so / is not regarded as safe and encoded as well
-      payload = self.jsonDumps(sg)
-      rsp = session.post(uriRoot + "/subscriberGroups/" + groupName, data=payload)
-      self.printResponseDetails(rsp)
-      updates += 1
-    
-    return updates
+      if not sg["subscriberGroupName"] in sgsInBqn:
+        self.logger.debug("Create subscriber group %s" % sg["subscriberGroupName"])
+        self.bqnApiRest(session, 'post', uriRoot + "/subscriberGroups/", sg["subscriberGroupName"], sg)
+        sgsInBqn[sg["subscriberGroupName"]] = {"group": sg, "inBilling": True}
+        creations += 1
+      else:
+        match = sgsInBqn[sg["subscriberGroupName"]]["group"]
+        sgsInBqn[sg["subscriberGroupName"]]["inBilling"] = True        
+        if not self.areEqual(match, sg, ["subscriberMembers", "subscriberRanges", "policyRate"]):
+          self.logger.debug("Group changed. In BQN: %s" % match)
+          self.logger.debug("           In Billing: %s" % sg)
+          self.logger.debug("Modify group %s" % sg["subscriberGroupName"])
+          self.bqnApiRest(session, 'post', uriRoot + "/subscriberGroups/", sg["subscriberGroupName"], sg)
+          modifications += 1
+
+    # Delete groups no longer in billing
+    for key in sgsInBqn:
+      if not sgsInBqn[key]["inBilling"]:
+        self.bqnApiRest(session, 'delete', uriRoot + "/subscriberGroups/", key)
+        deletions += 1
+
+    self.logger.warning("%s subscriber group synchronization: %d created, %d updated and %d deleted" % \
+                        (datetime.datetime.now(), creations, modifications, deletions))
 
   ############################################################################
 
@@ -450,12 +519,10 @@ class BillingSync:
       del s["block"]        
       del s["state"]        
 
-    updatedPolicies = self.updateBqnPolicies(uriRoot, session, data)
-    updatedSubscribers = self.updateBqnSubscribers(uriRoot, session, data)
-    updatedSubscriberGroups = self.updateBqnSubscriberGroups(uriRoot, session, data)
-
-    self.logger.warning("%s synchronization of %d policies, %d subscribers and %d groups" % \
-                 (datetime.datetime.now(), updatedPolicies, updatedSubscribers, updatedSubscriberGroups))
+    self.logger.warning("%s synchronization with BQN starts" % datetime.datetime.now())  
+    self.updateBqnPolicies(uriRoot, session, data)
+    self.updateBqnSubscribers(uriRoot, session, data)
+    self.updateBqnSubscriberGroups(uriRoot, session, data)
 
   ################################################################################
 
