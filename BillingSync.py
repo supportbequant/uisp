@@ -331,21 +331,24 @@ class BillingSync:
   def bqnApiRest(self, session, method, uri, id, entry=None):
     safeId = requests.utils.quote(id, safe='')  # Empty safe char list, so / is not regarded as safe and encoded as well
 
-    if method == 'post':
-      rsp = session.post(uri + safeId, data=self.jsonDumps(entry))
-      self.printResponseDetails(rsp)
-    elif method == 'put':
-      rsp = session.put(uri + safeId, data=self.jsonDumps(entry))
-      self.printResponseDetails(rsp)
-    elif method == 'get':
-      rsp = session.get(uri + safeId)
-      self.printResponseDetails(rsp)
-    elif method == 'delete':
-      rsp = session.delete(uri + safeId)
-      self.printResponseDetails(rsp)
-    else:
-      self.logger.debug("Unknown BQN API REST method %s" % method)
-  
+    try:
+      if method == 'post':
+        rsp = session.post(uri + safeId, data=self.jsonDumps(entry))
+        self.printResponseDetails(rsp)
+      elif method == 'put':
+        rsp = session.put(uri + safeId, data=self.jsonDumps(entry))
+        self.printResponseDetails(rsp)
+      elif method == 'get':
+        rsp = session.get(uri + safeId)
+        self.printResponseDetails(rsp)
+      elif method == 'delete':
+        rsp = session.delete(uri + safeId)
+        self.printResponseDetails(rsp)
+      else:
+        self.logger.debug("Unknown BQN API REST method %s" % method)
+    except Exception as e:
+      self.logger.error("Error in %s to %s. Exception %s" % (method, uri+safeId, e))
+
   ############################################################################
 
   def updateBqnPolicies(self, uriRoot, session, data):
