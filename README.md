@@ -62,9 +62,8 @@ scp ./uisp-main/BillingSync.py  ./uisp-main/sync-uisp-bqn ./uisp-main/sync-uisp-
 6. Make sure the following files are executable in BQN:
 ```
 ssh root@<BQN-OAM-IP>
-cd uisp
 chmod a+x ./uisp/sync-uisp-bqn
-chnod a+x ./uisp/sync-uisp-bqn.sh
+chmod a+x ./uisp/sync-uisp-bqn.sh
 exit
 ```
 
@@ -112,8 +111,7 @@ that the sync-uisp-bqn.sh MUST NOT be updated.
 4. Make sure the following updated file remains executable in BQN:
 ```
 ssh root@<BQN-OAM-IP>
-cd uisp
-chmod a+x ./uisp-main/sync-uisp-bqn
+chmod a+x ./uisp/sync-uisp-bqn
 exit
 ```
 
