@@ -63,8 +63,8 @@ scp ./uisp-main/BillingSync.py  ./uisp-main/sync-uisp-bqn ./uisp-main/sync-uisp-
 ```
 ssh root@<BQN-OAM-IP>
 cd uisp
-chmod a+x ./uisp-main/sync-uisp-bqn
-chnod a+x ./uisp-main/sync-uisp-bqn.sh
+chmod a+x ./uisp/sync-uisp-bqn
+chnod a+x ./uisp/sync-uisp-bqn.sh
 exit
 ```
 
