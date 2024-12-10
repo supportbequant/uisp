@@ -485,7 +485,7 @@ class BillingSync:
 
     # Delete groups no longer in billing
     for key in sgsInBqn:
-      if not sgsInBqn[key]["inBilling"]:
+      if not sgsInBqn[key]["inBilling"] and key != "all-subscribers":
         self.bqnApiRest(session, 'delete', uriRoot + "/subscriberGroups/", key)
         deletions += 1
 
