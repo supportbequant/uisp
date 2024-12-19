@@ -297,32 +297,40 @@ class BillingSync:
 
   ############################################################################
 
-  def areEqual(self, a, b, keys=None):
+  def areEqual(self, a, b, keys=None, excluded=[]):
     # Compare two variables for equality.
-    # keys argument restrict equal operation to those dictonary keys. If none, all checked.
+    # "keys" argument restrict operation to those dictionary keys, excluding those
+    # in "excluded" (possibly children fields of keys)
+    # If "keys" is none, all fields checked for equality, except "excluded".
     if isinstance(a, list) and isinstance(b, list):
       return sorted(a) == sorted(b)
     elif isinstance(a, dict) and isinstance(b, dict):
       if not keys:
-        return sorted(a.items()) == sorted(b.items())
-      else:
-        for k in keys:
-          # Check if dictionaries have item as key
-          if k not in a and k not in b:
+        keysA = sorted([k for k in a.keys() if k not in excluded])
+        keysB = sorted([k for k in b.keys() if k not in excluded])
+        if keysA != keysB:
+          return False
+        else:
+          keys = keysA
+      # Check if dictionaries have item as key
+      for k in keys:
+        if k in excluded:
+          continue
+        if k not in a and k not in b:
+          continue
+        elif k not in a and k in b:
+          if not b[k]:
             continue
-          elif k not in a and k in b:
-            if not b[k]:
-              continue
-            else:
-              return False
-          elif k in a and k not in b:
-            if not a[k]:
-              continue
-            else:
-              return False
-          elif not self.areEqual(a[k], b[k]):
+          else:
             return False
-        return True
+        elif k in a and k not in b:
+          if not a[k]:
+            continue
+          else:
+            return False
+        elif not self.areEqual(a[k], b[k], excluded=excluded):
+          return False
+      return True
     else:
       return a == b
 
@@ -376,7 +384,7 @@ class BillingSync:
       else:
         match = polsInBqn[p["policyName"]]["policy"]
         polsInBqn[p["policyName"]]["inBilling"] = True
-        if not self.areEqual(match, p, ["policyId", "rateLimitDownlink", "rateLimitUplink"]):
+        if not self.areEqual(match, p, keys=["policyId", "rateLimitDownlink", "rateLimitUplink"], excluded=["congestionMgmt"]):
           self.logger.debug("Policy changed. In BQN: %s" % match)
           self.logger.debug("            In Billing: %s" % p)
           self.logger.debug("Modify policy %s" % p["policyName"])
@@ -513,9 +521,6 @@ class BillingSync:
     # Adapt data to BQN format
     for item in data["policies"] + data["subscribers"] + data["subscriberGroups"]:
       self.normalize(item)
-    # Add fields not treated by billing
-    for p in data["policies"]:
-      p["rateLimitDownlink"]["congestionMgmt"] = True
     # Blocked subscribers have block policy
     for s in data["subscribers"]:
       if s["block"]:
