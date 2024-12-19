@@ -440,9 +440,12 @@ class BillingSync:
           self.bqnApiRest(session, 'post', uriRoot + "/subscribers/", s["subscriberIp"], s)
           modifications += 1
 
-    # Delete subscribers no longer in billing
+    # Delete subscribers no longer in billing that has no rules policy
     for key in subsInBqn:
-      if not subsInBqn[key]["inBilling"]:
+      self.logger.debug(subsInBqn[key])
+      if not subsInBqn[key]["inBilling"] and \
+        "policyAssignedBy" in subsInBqn[key]["subscriber"] and \
+        subsInBqn[key]["subscriber"]["policyAssignedBy"] != "rules":
         self.bqnApiRest(session, 'delete', uriRoot + "/subscribers/", key)
         deletions += 1
 
