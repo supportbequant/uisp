@@ -442,7 +442,6 @@ class BillingSync:
 
     # Delete subscribers no longer in billing that has no rules policy
     for key in subsInBqn:
-      self.logger.debug(subsInBqn[key])
       if not subsInBqn[key]["inBilling"] and \
         "policyAssignedBy" in subsInBqn[key]["subscriber"] and \
         subsInBqn[key]["subscriber"]["policyAssignedBy"] != "rules":
