@@ -388,7 +388,7 @@ class BillingSync:
           self.logger.debug("Policy changed. In BQN: %s" % match)
           self.logger.debug("            In Billing: %s" % p)
           self.logger.debug("Modify policy %s" % p["policyName"])
-          self.bqnApiRest(session, 'post', uriRoot + "/policies/rate/", p["policyName"], p)
+          self.bqnApiRest(session, 'put', uriRoot + "/policies/rate/", p["policyName"], p)
           modifications += 1
 
     # Generate a block policy to enforce inactive clients
@@ -439,13 +439,13 @@ class BillingSync:
             self.logger.debug("Subscriber changed. In BQN: %s" % match)
             self.logger.debug("                In Billing: %s" % s)
             self.logger.debug("Modify ID of subscriber %s" % s["subscriberIp"])
-            self.bqnApiRest(session, 'post', uriRoot + "/subscribers/", s["subscriberIp"], s)
+            self.bqnApiRest(session, 'put', uriRoot + "/subscribers/", s["subscriberIp"], s)
             modifications += 1
         elif not self.areEqual(match, s, ["subscriberId", "policyRate"]):
           self.logger.debug("Subscriber changed. In BQN: %s" % match)
           self.logger.debug("                In Billing: %s" % s)
           self.logger.debug("Modify subscriber %s" % s["subscriberIp"])
-          self.bqnApiRest(session, 'post', uriRoot + "/subscribers/", s["subscriberIp"], s)
+          self.bqnApiRest(session, 'put', uriRoot + "/subscribers/", s["subscriberIp"], s)
           modifications += 1
 
     # Delete subscribers no longer in billing that has no rules policy
@@ -490,7 +490,7 @@ class BillingSync:
           self.logger.debug("Group changed. In BQN: %s" % match)
           self.logger.debug("           In Billing: %s" % sg)
           self.logger.debug("Modify group %s" % sg["subscriberGroupName"])
-          self.bqnApiRest(session, 'post', uriRoot + "/subscriberGroups/", sg["subscriberGroupName"], sg)
+          self.bqnApiRest(session, 'put', uriRoot + "/subscriberGroups/", sg["subscriberGroupName"], sg)
           modifications += 1
 
     # Delete groups no longer in billing
