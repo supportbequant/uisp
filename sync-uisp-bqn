@@ -169,7 +169,7 @@ class UispSync(BillingSync):
 
   ################################################################################
 
-  def normalizeData(self, plans, clients, services, devices, sites):
+  def normalizeData(self, plans, clients, services, devices, sites, noStatusBlocking):
     data = {'subscribers': [], 'policies': [], 'subscriberGroups': []}
     subscriberGroups = {}
 
@@ -263,7 +263,10 @@ class UispSync(BillingSync):
           subscriber["policyRate"] = ratePolicy
           subscriber["subscriberId"] = self.getSubscriberId(c)
           subscriber["state"] = cp["status"]
-          subscriber["block"] = cp['status'] != UispSync.STATUS_ACTIVE and cp['status'] != UispSync.STATUS_SUSPENDED
+          if noStatusBlocking:
+            subscriber["block"] = False
+          else:
+            subscriber["block"] = cp['status'] != UispSync.STATUS_ACTIVE and cp['status'] != UispSync.STATUS_SUSPENDED
           subscriber["subscriberIp"] = ip['address']
           # Done, add subscriber to the data structure
           data["subscribers"].append(subscriber)
@@ -311,6 +314,8 @@ if __name__ == "__main__":
                     help="Display extra informationt (repeat for increased verbosity)")
   parser.add_argument('-lf', '--log-file', default=None, type=str, dest="logFile",
       help='Log file to use. If absent, logs go to the standard output')
+  parser.add_argument('-nb', '--no-status-blocking', action='store_true', dest="noStatusBlocking", default=False, 
+      help='If present, account service status will be ignored and blockng depends on policy speed limits. False by default')
   parser.add_argument('uisp', metavar='UISP-HOST', type=str, help='UISP URL')
   parser.add_argument('key', metavar='API-KEY', type=str, help=' REST API key')
   args = parser.parse_args()
@@ -326,7 +331,7 @@ if __name__ == "__main__":
   devices = billingSync.getUnmsEntries(uispHost, args.key, '/devices')
   sites = billingSync.getUnmsEntries(uispHost, args.key, '/sites')
 
-  data = billingSync.normalizeData(plans, clients, services, devices, sites)
+  data = billingSync.normalizeData(plans, clients, services, devices, sites, args.noStatusBlocking)
   billingSync.printData(data)
   if args.bqn:
     billingSync.updateBqn(args.bqn[0], args.bqn[1], args.bqn[2], data)
