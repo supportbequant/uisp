@@ -8,7 +8,7 @@ BQN_OAM_IP=192.168.0.121
 # Name of the REST user in the BQN server
 BQN_REST_USER=myuser 
 # Password of the REST user in the BQN server
-BQN_REST_PW=mypassword
+BQN_REST_PW='mypassword'
 # IP address or domain of the UISP server
 UISP_SERVER=uisp.com
 # REST API KEY of the UISP server
