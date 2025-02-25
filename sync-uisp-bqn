@@ -294,8 +294,8 @@ class UispSync(BillingSync):
     self.printEntries(plans, ["id", "servicePlanType", "uploadSpeed", "downloadSpeed"], title="PLANS")
     self.printEntries(clients, ["id", "firstName", "lastName", "companyName"], title="CLIENTS")
     self.printEntries(services, ["clientId", "servicePlanType", "servicePlanId", "unmsClientSiteId"], title="SERVICES")
-    #self.printEntries(devices, [['identification', 'site', 'id'], ['identification', 'site', 'id', 'ipAddress']], title="DEVICES")
-    #self.printEntries(sites, [['identification', 'id'], ['description', 'ipAddress']], title="SITES")
+    self.printEntries(devices, [['identification', 'site', 'id'], 'ipAddress'], title="DEVICES")
+    self.printEntries(sites, [['identification', 'id'], ['description', 'ipAddresses']], title="SITES")
 
 ################################################################################
 

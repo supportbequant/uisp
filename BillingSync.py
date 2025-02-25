@@ -171,18 +171,36 @@ class BillingSync:
       self.logger.info("\n" + title)
 
     tableSizes = []
+    headers = []
     for f in fields:
-      tableSizes.append( len( max(list(str(x[f]) for x in entries) + [f], key=len) ) )
+      if isinstance(f, list): # path too subfield
+        tableSizes.append(40)
+        headers.append(f[-1])
+      else:
+        tableSizes.append( len( max(list(str(x[f]) for x in entries) + [f], key=len) ) )
+        headers.append(f)
 
     rowFormat = ''
     for size in tableSizes:
       rowFormat += "{:<%d}" % (size + 1)
-    self.logger.info(rowFormat.format(*fields))
+    self.logger.info(rowFormat.format(*headers))
 
     for e in entries:
       values = []
       for f in fields:
-        values.append(e[f])
+        val = None
+        if isinstance(f, list): # path too subfield
+          if self.fieldIsNotNull(e, f):
+            val = e[f[0]]
+            for i in f[1:]:
+              val = val[i]
+        else:
+          val = e[f]
+        if not val:
+          val = "n/a"
+        elif isinstance(val, list):
+          val =  ','.join(val)
+        values.append(val)
       self.logger.info(rowFormat.format(*values))
 
   ############################################################################
