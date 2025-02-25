@@ -166,6 +166,27 @@ class BillingSync:
 
   ############################################################################
 
+  def printEntries(self, entries, fields, title=''):
+    if title:
+      self.logger.info("\n" + title)
+
+    tableSizes = []
+    for f in fields:
+      tableSizes.append( len( max(list(str(x[f]) for x in entries) + [f], key=len) ) )
+
+    rowFormat = ''
+    for size in tableSizes:
+      rowFormat += "{:<%d}" % (size + 1)
+    self.logger.info(rowFormat.format(*fields))
+
+    for e in entries:
+      values = []
+      for f in fields:
+        values.append(e[f])
+      self.logger.info(rowFormat.format(*values))
+
+  ############################################################################
+
   def printPolicies(self, data):
     if not data or not "policies" in data or len(data["policies"]) == 0:
       self.logger.debug("No policies to print")
