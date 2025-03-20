@@ -75,10 +75,11 @@ class BillingSync:
       logging.basicConfig(
                     format='%(message)s',
                     level=logLevel,
+                    encoding="utf-8",
                     handlers=[logging.handlers.RotatingFileHandler(logFile, maxBytes=5*10**8, backupCount=10)]
       )
     else:
-      logging.basicConfig(stream=sys.stdout, format='%(message)s', level=logLevel)
+      logging.basicConfig(stream=sys.stdout, format='%(message)s', level=logLevel, encoding="utf-8")
 
   ############################################################################
 
@@ -173,11 +174,11 @@ class BillingSync:
     tableSizes = []
     headers = []
     for f in fields:
-      if isinstance(f, list): # path too subfield
-        tableSizes.append(40)
+      if isinstance(f, list): # path to subfield
+        tableSizes.append(20)
         headers.append(f[-1])
       else:
-        tableSizes.append( len( max(list(str(x[f]) for x in entries) + [f], key=len) ) )
+        tableSizes.append( min(50, len(max(list(str(x[f]) for x in entries) + [f], key=len))) )
         headers.append(f)
 
     rowFormat = ''
@@ -189,7 +190,7 @@ class BillingSync:
       values = []
       for f in fields:
         val = None
-        if isinstance(f, list): # path too subfield
+        if isinstance(f, list): # path to subfield
           if self.fieldIsNotNull(e, f):
             val = e[f[0]]
             for i in f[1:]:
@@ -199,7 +200,9 @@ class BillingSync:
         if not val:
           val = "n/a"
         elif isinstance(val, list):
-          val =  ','.join(val)
+          val =  ','.join([str(x) for x in val])
+        elif isinstance(val, dict):
+          val =  ','.join([str(x) for x in val.items()])
         values.append(val)
       self.logger.info(rowFormat.format(*values))
 

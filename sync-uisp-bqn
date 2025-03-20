@@ -72,6 +72,46 @@ class UispSync(BillingSync):
 
   ############################################################################
 
+  def getGroups(self, data, devices):
+    """
+    Used when only groups of IPs are sxtracted, without policies nor subscribers.
+    """
+    subscriberGroups = {}
+
+    for dev in devices:
+      if (dev['identification']['role'] == 'station' or \
+          dev['identification']['role'] == 'wireless' or
+          dev['identification']['role'] == 'router') and \
+         self.fieldIsNotNull(dev, ['ipAddress']) and \
+         self.fieldIsNotNull(dev, ['identification', 'site', 'id']):
+        address = dev['ipAddress'].split('/', 1)[0]
+        if self.fieldIsNotNull(dev, ['attributes', 'apDevice', 'name']):
+          groupName = 'L1-' + dev['attributes']['apDevice']['name']
+          if not groupName in subscriberGroups:
+            subscriberGroups[groupName] = {
+                "subscriberGroupName": groupName,
+                "subscriberMembers": [address],
+                "subscriberGroupType": "access-point"
+            }
+          else:
+            subscriberGroups[groupName]["subscriberMembers"].append(address)
+        if self.fieldIsNotNull(dev, ['identification', 'site', 'parent', 'name']):                                  
+          groupName = 'L2-' + dev['identification']['site']['parent']['name']
+          if not groupName in subscriberGroups:
+            subscriberGroups[groupName] = {
+                "subscriberGroupName": groupName,
+                "subscriberMembers": [address],
+                "subscriberGroupType": "tower"
+            }
+          else:
+            subscriberGroups[groupName]["subscriberMembers"].append(address)
+
+    data["subscriberGroups"] = list(subscriberGroups.values())
+
+    return data
+
+  ############################################################################
+
   def getPlanName(self, prefix, upRate, dnRate):
     rsp = prefix
     if not upRate and not dnRate:
@@ -158,11 +198,6 @@ class UispSync(BillingSync):
       groups = []
       if site['identification']['type'] == 'endpoint':
         if self.fieldIsNotNull(site, ['identification', 'parent', 'name']):
-          groups.append('L1-' + site['identification']['parent']['name'])
-      elif site['identification']['type'] == 'site':
-        if self.fieldIsNotNull(site, ['identification', 'name']):                                    
-          groups.append('L1-' + site['identification']['name'])
-        if self.fieldIsNotNull(site, ['identification', 'parent', 'name']):
           groups.append('L2-' + site['identification']['parent']['name'])
       for ip in site['description']['ipAddresses']:
         ips.append({'address': ip, 'groups': groups})
@@ -171,8 +206,7 @@ class UispSync(BillingSync):
 
   ################################################################################
 
-  def normalizeData(self, plans, clients, services, devices, sites, noStatusBlocking):
-    data = {'subscribers': [], 'policies': [], 'subscriberGroups': []}
+  def normalizeData(self, data, plans, clients, services, devices, sites, noStatusBlocking):
     subscriberGroups = {}
 
     # Policies
@@ -318,6 +352,9 @@ if __name__ == "__main__":
   - Synchronization may take several minutes.
   - If the synchronization fails, no retry is attempted (must be don e externally).
   - No scheduling of script execution (must be done externally).
+
+  In old python versions (3.3 or older) with special characters, set LC_ALL variable:
+  # export LC_ALL="en_US.UTF-8"
   """, formatter_class=argparse.RawTextHelpFormatter)
 
   parser.add_argument('-b', help='BQN address and REST credentials. If absent, no BQN synchromization',
@@ -328,6 +365,8 @@ if __name__ == "__main__":
       help='Log file to use. If absent, logs go to the standard output')
   parser.add_argument('-nb', '--no-status-blocking', action='store_true', dest="noStatusBlocking", default=False, 
       help='If present, account service status will be ignored and blockng depends on policy speed limits. False by default')
+  parser.add_argument('-og', '--onlyGroups', action='store_true', dest="onlyGroups", default=False, 
+      help='If present, gets only location groups, no policies nor subscribers. False by default')
   parser.add_argument('uisp', metavar='UISP-HOST', type=str, help='UISP URL')
   parser.add_argument('key', metavar='API-KEY', type=str, help=' REST API key')
   args = parser.parse_args()
@@ -337,18 +376,19 @@ if __name__ == "__main__":
   billingSync.logger.warning("%s synchronization script starts (v2.0)" % datetime.datetime.now())
 
   uispHost = args.uisp.replace("https://", "")
-  plans = billingSync.getUcrmEntries(uispHost, args.key, '/service-plans')
-  clients = billingSync.getUcrmEntries(uispHost, args.key, '/clients')
-  services = billingSync.getUcrmEntries(uispHost, args.key, '/clients/services')
-  devices = billingSync.getUnmsEntries(uispHost, args.key, '/devices')
-  sites = billingSync.getUnmsEntries(uispHost, args.key, '/sites')
+  data = {'subscribers': [], 'policies': [], 'subscriberGroups': []}
 
-  if args.verbose >= 3:
-    billingSync.dumpUispTables(plans, clients, services, devices, sites)
-    billingSync.logger.warning("%s Exist after UISP table dump" % datetime.datetime.now())
-    sys.exit(0)
+  if args.onlyGroups:
+    devices = billingSync.getUnmsEntries(uispHost, args.key, '/devices')
+    data = billingSync.getGroups(data, devices)
+  else:
+    plans = billingSync.getUcrmEntries(uispHost, args.key, '/service-plans')
+    clients = billingSync.getUcrmEntries(uispHost, args.key, '/clients')
+    services = billingSync.getUcrmEntries(uispHost, args.key, '/clients/services')
+    devices = billingSync.getUnmsEntries(uispHost, args.key, '/devices')
+    sites = billingSync.getUnmsEntries(uispHost, args.key, '/sites')
+    data = billingSync.normalizeData(data, plans, clients, services, devices, sites, args.noStatusBlocking)
 
-  data = billingSync.normalizeData(plans, clients, services, devices, sites, args.noStatusBlocking)
   billingSync.printData(data)
   if args.bqn:
     billingSync.updateBqn(args.bqn[0], args.bqn[1], args.bqn[2], data)
