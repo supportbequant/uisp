@@ -45,6 +45,8 @@ class UispSync(BillingSync):
   STATUS_QUOTED = 7
   STATUS_INACTIVE = 8
 
+  UNLIMITED_RATE = -1  # In REST this will be unlimited speed
+
   ############################################################################
 
   def getEntries(self, url, key):
@@ -117,15 +119,14 @@ class UispSync(BillingSync):
     if not upRate and not dnRate:
       rsp += "unlimited"
     else:
-      if upRate:
-        rsp += str(math.ceil(upRate)) + 'M/'
-      if dnRate:
-        rsp += str(math.ceil(dnRate)) + 'M'
+      upLimit = "%sM" % math.ceil(upRate) if upRate else "x"
+      dnLimit = "%sM" % math.ceil(dnRate) if dnRate else "x"
+      rsp += "%s/%s" % (upLimit, dnLimit)
     return rsp
 
   def getPlanLimits(self, upRate, dnRate):
-    upLimit = 10**8 # 100 Gbps limit = no limit
-    dnLimit = 10**8
+    upLimit = UispSync.UNLIMITED_RATE
+    dnLimit = UispSync.UNLIMITED_RATE
     if upRate:
       upLimit = math.ceil(1000*upRate)
     if dnRate:
@@ -133,16 +134,16 @@ class UispSync(BillingSync):
     return upLimit, dnLimit
 
   def getSubscriberId(self, client):
+    rsp = 'UNKNOWN'
     if client['firstName'] and client['lastName']:
-      return "%s %s" % (client['firstName'], client['lastName'])
+      rsp = "%s %s" % (client['firstName'], client['lastName'])
     elif client['companyName']:
-      return client['companyName']
+      rsp = client['companyName']
     elif client['lastName']:
-      return client['lastName']
+      rsp = client['lastName']
     elif client['firstNane']:
-      return client['firstName']
-    else:
-      return 'UNKNOWN'
+      rsp = client['firstName']
+    return rsp.strip()
 
   def getOverridePolicy(self, clientPlan):
     planName = self.getPlanName("OVRD %s with " % clientPlan['servicePlanName'],
@@ -198,7 +199,12 @@ class UispSync(BillingSync):
       groups = []
       if site['identification']['type'] == 'endpoint':
         if self.fieldIsNotNull(site, ['identification', 'parent', 'name']):
-          groups.append('L2-' + site['identification']['parent']['name'])
+          groups.append('L2-' + site['identification']['parent']['name'])  # old versions used L1-
+        #elif site['identification']['type'] == 'site':
+          #if self.fieldIsNotNull(site, ['identification', 'name']):
+            #groups.append('L1-' + site['identification']['name'])
+          #if self.fieldIsNotNull(site, ['identification', 'parent', 'name']):
+            #groups.append('L2-' + site['identification']['parent']['name'])
       for ip in site['description']['ipAddresses']:
         ips.append({'address': ip, 'groups': groups})
 
@@ -373,7 +379,7 @@ if __name__ == "__main__":
 
   billingSync = UispSync(args.verbose, args.logFile)
 
-  billingSync.logger.warning("%s synchronization script starts (v2.0)" % datetime.datetime.now())
+  billingSync.logger.warning("%s synchronization script starts (v2.1)" % datetime.datetime.now())
 
   uispHost = args.uisp.replace("https://", "")
   data = {'subscribers': [], 'policies': [], 'subscriberGroups': []}
